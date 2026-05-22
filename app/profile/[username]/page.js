@@ -176,18 +176,37 @@ export default function ProfilePage() {
                 Edit profile
               </Link>
             ) : (
-              <button onClick={handleFollow} style={{
-                backgroundColor: isFollowing ? 'white' : 'var(--primary)',
-                border: isFollowing ? '2px solid var(--border)' : 'none',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                fontSize: '14px',
-                fontWeight: '500',
-                color: isFollowing ? 'var(--text)' : 'white',
-                cursor: 'pointer',
-              }}>
-                {isFollowing ? 'Following' : 'Follow'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={handleFollow} style={{
+                    backgroundColor: isFollowing ? 'white' : 'var(--primary)',
+                    border: isFollowing ? '2px solid var(--border)' : 'none',
+                    borderRadius: '20px',
+                    padding: '8px 20px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: isFollowing ? 'var(--text)' : 'white',
+                    cursor: 'pointer',
+                }}>
+                    {isFollowing ? 'Following' : 'Follow'}
+                </button>
+                {isFollowing && (
+                    <button
+                    onClick={() => router.push(`/messages?user=${profile.username}`)}
+                    style={{
+                        backgroundColor: 'white',
+                        border: '2px solid var(--border)',
+                        borderRadius: '20px',
+                        padding: '8px 20px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: 'var(--text)',
+                        cursor: 'pointer',
+                    }}
+                    >
+                    💬 Message
+                    </button>
+                )}
+                </div>
             )}
           </div>
 

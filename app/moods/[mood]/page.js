@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Navbar from '../../components/Navbar'
 import PostCard from '../../components/PostCard'
 import { createClient } from '../../lib/supabase-client'
@@ -356,9 +357,14 @@ export default function MoodRoom() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '3px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text)' }}>
+                      <Link href={`/profile/${msg.username}`} style={{
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        color: 'var(--text)',
+                        textDecoration: 'none',
+                        }}>
                         {msg.username}
-                      </span>
+                      </Link>
                       <span style={{ fontSize: '11px', color: 'var(--text-soft)' }}>
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
