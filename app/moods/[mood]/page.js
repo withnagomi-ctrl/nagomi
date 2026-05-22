@@ -7,6 +7,8 @@ import Navbar from '../../components/Navbar'
 import PostCard from '../../components/PostCard'
 import { createClient } from '../../lib/supabase-client'
 import ReportModal from '../../components/ReportModal'
+import { containsBannedWord } from '../../lib/wordFilter'
+import { checkRateLimit } from '../../lib/rateLimit'
 
 const moodRooms = [
   { name: 'I Feel Empty', slug: 'empty', emoji: '🕳️', desc: 'For when real life feels too quiet after the ending.', mood: 'Empty' },
@@ -181,24 +183,35 @@ export default function MoodRoom() {
     if (!messageInput.trim()) return
 
     if (!currentUser) {
-      router.push('/login')
-      return
+        router.push('/login')
+        return
+    }
+
+    if (containsBannedWord(messageInput)) {
+        alert('Your message contains inappropriate content and cannot be sent.')
+        return
+    }
+
+    const { allowed, message } = await checkRateLimit(currentUser.id, 'live_chat')
+    if (!allowed) {
+        alert(message)
+        return
     }
 
     setSending(true)
 
     await supabase
-      .from('mood_messages')
-      .insert({
+        .from('mood_messages')
+        .insert({
         room_slug: mood,
         user_id: currentUser.id,
         username: currentProfile?.username || 'anonymous',
         content: messageInput.trim(),
-      })
+        })
 
     setMessageInput('')
     setSending(false)
-  }
+    }
 
   async function handlePost(e) {
     e.preventDefault()

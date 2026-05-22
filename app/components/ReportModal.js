@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '../lib/supabase-client'
+import { checkRateLimit } from '../lib/rateLimit'
 
 const reasons = [
   'Harassment or bullying',
@@ -20,6 +21,12 @@ export default function ReportModal({ reportedUserId, reportedPostId, messageCon
 
   async function handleSubmit() {
     if (!selectedReason) return
+        const { allowed, message: limitMessage } = await checkRateLimit(user.id, 'report')
+        if (!allowed) {
+        alert(limitMessage)
+        setSubmitting(false)
+        return
+        }
     setSubmitting(true)
 
     const { data: { user } } = await supabase.auth.getUser()

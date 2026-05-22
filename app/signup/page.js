@@ -13,6 +13,7 @@ export default function Signup() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const [acceptedRules, setAcceptedRules] = useState(false)
 
   async function handleSignup(e) {
     e.preventDefault()
@@ -167,6 +168,36 @@ export default function Signup() {
             />
           </div>
 
+          <div style={{
+            backgroundColor: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '16px',
+            fontSize: '13px',
+            color: 'var(--text-soft)',
+            lineHeight: '1.6',
+            marginBottom: '8px',
+            }}>
+            <p style={{ marginBottom: '12px' }}>
+                Nagomi is a community platform for anime discussion. By joining you agree to:
+            </p>
+            <ul style={{ paddingLeft: '16px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li>Keep conversations respectful and appropriate</li>
+                <li>Not share private information like your school, address, or phone number</li>
+                <li>Not ask others for private information or photos</li>
+                <li>Follow the community rules</li>
+            </ul>
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input
+                type="checkbox"
+                checked={acceptedRules}
+                onChange={e => setAcceptedRules(e.target.checked)}
+                style={{ marginTop: '2px', flexShrink: 0 }}
+                />
+                <span>I understand and agree to the <a href="/rules" target="_blank" style={{ color: 'var(--primary)' }}>community rules</a></span>
+            </label>
+            </div>
+
           {error && (
             <p style={{ fontSize: '13px', color: '#e85555', textAlign: 'center' }}>
               {error}
@@ -175,7 +206,7 @@ export default function Signup() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !acceptedRules}
             style={{
               backgroundColor: 'var(--primary)',
               color: 'white',

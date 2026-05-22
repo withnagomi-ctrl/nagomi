@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '../lib/supabase-client'
 
+
+
 const reactionTypes = [
   { type: 'felt_this', label: 'Felt this', emoji: '🫀' },
   { type: 'same_pain', label: 'Same pain', emoji: '😭' },
@@ -13,6 +15,7 @@ const reactionTypes = [
 ]
 
 export default function PostCard({ post, currentUserId }) {
+  const [deleted, setDeleted] = useState(false)
   const [reactions, setReactions] = useState(post.reactions || [])
   const supabase = createClient()
 
@@ -51,6 +54,19 @@ if (data) setReactions(prev => [...prev, data])
     }
   }
 
+  async function handleDelete() {
+    if (!currentUserId || currentUserId !== post.user_id) return
+    const confirmed = window.confirm('Delete this post?')
+    if (!confirmed) return
+
+    await supabase
+        .from('posts')
+        .delete()
+        .eq('id', post.id)
+
+    setDeleted(true)
+    }
+
   function getReactionCount(type) {
     return reactions.filter(r => r.reaction_type === type).length
   }
@@ -58,6 +74,8 @@ if (data) setReactions(prev => [...prev, data])
   function hasReacted(type) {
     return reactions.some(r => r.user_id === currentUserId && r.reaction_type === type)
   }
+
+  if (deleted) return null
 
   return (
     <div style={{
@@ -150,8 +168,9 @@ if (data) setReactions(prev => [...prev, data])
         {post.content}
       </p>
 
-      {/* Reactions */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      {/* Reactions and actions */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         {reactionTypes.map(r => (
           <button
             key={r.type}
@@ -173,6 +192,23 @@ if (data) setReactions(prev => [...prev, data])
           </button>
         ))}
       </div>
+      </div>
+        {currentUserId === post.user_id && (
+        <button
+            onClick={handleDelete}
+            style={{
+            background: 'none',
+            border: 'none',
+            fontSize: '12px',
+            color: 'var(--text-soft)',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            opacity: 0.6,
+            }}
+        >
+            🗑 Delete
+        </button>
+        )}
     </div>
   )
 }

@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Navbar from '../../components/Navbar'
 import PostCard from '../../components/PostCard'
 import { createClient } from '../../lib/supabase-client'
+import { containsBannedWord } from '../../lib/wordFilter'
+import { checkRateLimit } from '../../lib/rateLimit'
 
 const tabs = [
   'After the Ending',
@@ -176,6 +178,16 @@ export default function AnimeRoom() {
       return
     }
     if (!postContent.trim()) return
+        if (containsBannedWord(postContent)) {
+    alert('Your post contains inappropriate content.')
+    return
+    }
+
+    const { allowed, message } = await checkRateLimit(currentUser.id, 'post')
+    if (!allowed) {
+    alert(message)
+    return
+    }
     setSubmitting(true)
 
     let postType = 'Reaction'

@@ -266,15 +266,22 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
       <footer style={{
         textAlign: 'center',
         padding: '40px 24px',
         color: 'var(--text-soft)',
         fontSize: '14px',
         borderTop: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        alignItems: 'center',
       }}>
-        nagomi — a cosy place for romance recovery 🌸
+        <p>nagomi — a cosy place for romance recovery 🌸</p>
+        <div style={{ display: 'flex', gap: '24px' }}>
+          <a href="/rules" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>Community Rules</a>
+          <a href="/about" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>About</a>
+        </div>
       </footer>
     </div>
   )

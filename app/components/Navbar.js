@@ -29,6 +29,7 @@ export default function Navbar() {
         setProfile(profile)
       }
       // Get unread notification count
+        if (user) {
         const { count: notifCount } = await supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
@@ -42,6 +43,7 @@ export default function Navbar() {
             .eq('receiver_id', user.id)
             .eq('read', false)
         setUnreadMessages(msgCount || 0)
+        }
     }
 
     getUser()

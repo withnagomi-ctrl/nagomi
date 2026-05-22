@@ -19,6 +19,8 @@ export default function ProfilePage() {
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -79,6 +81,24 @@ export default function ProfilePage() {
         setIsFollowing(!!followData)
       }
 
+      if (user) {
+        const { data: blockData } = await supabase
+            .from('blocks')
+            .select('*')
+            .eq('blocker_id', user.id)
+            .eq('blocked_id', profileData.id)
+            .single()
+        setIsBlocked(!!blockData)
+
+        const { data: muteData } = await supabase
+            .from('mutes')
+            .select('*')
+            .eq('muter_id', user.id)
+            .eq('muted_id', profileData.id)
+            .single()
+        setIsMuted(!!muteData)
+        }
+
       setLoading(false)
     }
 
@@ -119,6 +139,52 @@ setIsFollowing(true)
 setFollowerCount(prev => prev + 1)
     }
   }
+
+  async function handleBlock() {
+    if (!currentUser) return
+
+    if (isBlocked) {
+        await supabase
+        .from('blocks')
+        .delete()
+        .eq('blocker_id', currentUser.id)
+        .eq('blocked_id', profile.id)
+        setIsBlocked(false)
+    } else {
+        await supabase
+        .from('blocks')
+        .insert({ blocker_id: currentUser.id, blocked_id: profile.id })
+        setIsBlocked(true)
+        // Also unfollow if following
+        if (isFollowing) {
+        await supabase
+            .from('follows')
+            .delete()
+            .eq('follower_id', currentUser.id)
+            .eq('following_id', profile.id)
+        setIsFollowing(false)
+        setFollowerCount(prev => prev - 1)
+        }
+    }
+    }
+
+    async function handleMute() {
+    if (!currentUser) return
+
+    if (isMuted) {
+        await supabase
+        .from('mutes')
+        .delete()
+        .eq('muter_id', currentUser.id)
+        .eq('muted_id', profile.id)
+        setIsMuted(false)
+    } else {
+        await supabase
+        .from('mutes')
+        .insert({ muter_id: currentUser.id, muted_id: profile.id })
+        setIsMuted(true)
+    }
+    }
 
   if (loading) return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }}>
@@ -188,37 +254,69 @@ setFollowerCount(prev => prev + 1)
                 Edit profile
               </Link>
             ) : (
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                 <button onClick={handleFollow} style={{
-                    backgroundColor: isFollowing ? 'white' : 'var(--primary)',
-                    border: isFollowing ? '2px solid var(--border)' : 'none',
+                backgroundColor: isFollowing ? 'white' : 'var(--primary)',
+                border: isFollowing ? '2px solid var(--border)' : 'none',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: isFollowing ? 'var(--text)' : 'white',
+                cursor: 'pointer',
+                width: '120px',
+                }}>
+                {isFollowing ? 'Following' : 'Follow'}
+                </button>
+                <button
+                onClick={() => router.push(`/messages?user=${profile.username}`)}
+                style={{
+                    backgroundColor: 'white',
+                    border: '2px solid var(--border)',
                     borderRadius: '20px',
                     padding: '8px 20px',
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: isFollowing ? 'var(--text)' : 'white',
+                    color: 'var(--text)',
                     cursor: 'pointer',
-                }}>
-                    {isFollowing ? 'Following' : 'Follow'}
+                    width: '120px',
+                }}
+                >
+                💬 Message
                 </button>
-                {isFollowing && (
-                    <button
-                    onClick={() => router.push(`/messages?user=${profile.username}`)}
-                    style={{
-                        backgroundColor: 'white',
-                        border: '2px solid var(--border)',
-                        borderRadius: '20px',
-                        padding: '8px 20px',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                        color: 'var(--text)',
-                        cursor: 'pointer',
-                    }}
-                    >
-                    💬 Message
-                    </button>
-                )}
-                </div>
+                <button
+                onClick={handleMute}
+                style={{
+                    backgroundColor: 'white',
+                    border: '2px solid var(--border)',
+                    borderRadius: '20px',
+                    padding: '8px 20px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                    width: '120px',
+                }}
+                >
+                {isMuted ? '🔔 Unmute' : '🔇 Mute'}
+                </button>
+                <button
+                onClick={handleBlock}
+                style={{
+                    backgroundColor: isBlocked ? '#ffe4e4' : 'white',
+                    border: `2px solid ${isBlocked ? '#e85555' : 'var(--border)'}`,
+                    borderRadius: '20px',
+                    padding: '8px 20px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: isBlocked ? '#e85555' : 'var(--text)',
+                    cursor: 'pointer',
+                    width: '120px',
+                }}
+                >
+                {isBlocked ? '🚫 Unblock' : '🚫 Block'}
+                </button>
+            </div>
             )}
           </div>
 

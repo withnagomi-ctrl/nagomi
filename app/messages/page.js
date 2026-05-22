@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import { createClient } from '../lib/supabase-client'
+import { containsBannedWord } from '../lib/wordFilter'
+import { checkRateLimit } from '../lib/rateLimit'
 import ReportModal from '../components/ReportModal'
 
 export default function Messages() {
@@ -16,12 +18,15 @@ export default function Messages() {
   const [currentUser, setCurrentUser] = useState(null)
   const [currentProfile, setCurrentProfile] = useState(null)
   const [conversations, setConversations] = useState([])
+  const [requests, setRequests] = useState([])
   const [activeConvo, setActiveConvo] = useState(null)
+  const [activeIsRequest, setActiveIsRequest] = useState(false)
   const [messages, setMessages] = useState([])
   const [messageInput, setMessageInput] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [activeTab, setActiveTab] = useState('messages')
   const [reportTarget, setReportTarget] = useState(null)
 
   useEffect(() => {
@@ -43,9 +48,9 @@ export default function Messages() {
 
       setCurrentProfile(profile)
       await loadConversations(user.id)
+      await loadRequests(user.id)
       setLoading(false)
 
-      // Auto open conversation if user param is present
       const params = new URLSearchParams(window.location.search)
       const targetUsername = params.get('user')
       if (targetUsername) {
@@ -71,9 +76,22 @@ export default function Messages() {
             .single()
 
           if (iFollow && theyFollow) {
-            await openChat(user, targetProfile)
+            await openChat(user, targetProfile, false)
           } else {
-            alert('You can only message users who follow you back.')
+            // Check if request already sent
+            const { data: existingRequest } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('sender_id', user.id)
+              .eq('receiver_id', targetProfile.id)
+              .eq('is_request', true)
+              .single()
+
+            if (existingRequest) {
+              alert('You have already sent a message request to this user.')
+            } else {
+              await openChat(user, targetProfile, true)
+            }
           }
         }
       }
@@ -97,6 +115,7 @@ export default function Messages() {
       .from('messages')
       .select('*, sender:profiles!messages_sender_id_fkey(id, username, avatar_url), receiver:profiles!messages_receiver_id_fkey(id, username, avatar_url)')
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq('is_request', false)
       .order('created_at', { ascending: false })
 
     if (!data) return
@@ -120,17 +139,34 @@ export default function Messages() {
     setConversations(Object.values(convMap))
   }
 
-  // Single function to open a chat — always cleans up old channel first
-  async function openChat(user, otherProfile) {
-    // Clean up existing channel first
+  async function loadRequests(userId) {
+    const { data } = await supabase
+      .from('messages')
+      .select('*, sender:profiles!messages_sender_id_fkey(id, username, avatar_url)')
+      .eq('receiver_id', userId)
+      .eq('is_request', true)
+      .eq('request_status', 'pending')
+      .order('created_at', { ascending: false })
+
+    setRequests(data || [])
+  }
+
+  async function openChat(user, otherProfile, isRequest) {
     if (channelRef.current) {
       await supabase.removeChannel(channelRef.current)
       channelRef.current = null
     }
 
     setActiveConvo(otherProfile)
+    setActiveIsRequest(isRequest)
     setLoadingMessages(true)
     setMessages([])
+
+    if (isRequest) {
+      // For new request — show empty chat with send one message ability
+      setLoadingMessages(false)
+      return
+    }
 
     const { data } = await supabase
       .from('messages')
@@ -143,24 +179,21 @@ export default function Messages() {
     setMessages(data || [])
     setLoadingMessages(false)
 
-    // Mark as read in database
     await supabase
-    .from('messages')
-    .update({ read: true })
-    .eq('sender_id', otherProfile.id)
-    .eq('receiver_id', user.id)
-    .eq('read', false)
+      .from('messages')
+      .update({ read: true })
+      .eq('sender_id', otherProfile.id)
+      .eq('receiver_id', user.id)
+      .eq('read', false)
 
-    // Clear unread count in state directly
     setConversations(prev =>
-    prev.map(convo =>
+      prev.map(convo =>
         convo.profile.id === otherProfile.id
-        ? { ...convo, unread: 0 }
-        : convo
-    )
+          ? { ...convo, unread: 0 }
+          : convo
+      )
     )
 
-    // Set up single realtime channel
     const channelName = `messages-${[user.id, otherProfile.id].sort().join('-')}-${Date.now()}`
     const channel = supabase.channel(channelName)
 
@@ -191,25 +224,77 @@ export default function Messages() {
 
   async function openConversation(otherProfile) {
     if (!currentUser) return
-    await openChat(currentUser, otherProfile)
+    await openChat(currentUser, otherProfile, false)
   }
 
   async function handleSend(e) {
     e.preventDefault()
     if (!messageInput.trim() || !activeConvo || !currentUser) return
+
+    if (containsBannedWord(messageInput)) {
+      alert('Your message contains inappropriate content and cannot be sent.')
+      return
+    }
+
+    const { allowed, message: limitMessage } = await checkRateLimit(currentUser.id, 'direct_message')
+    if (!allowed) {
+      alert(limitMessage)
+      return
+    }
+
     setSending(true)
 
-    await supabase
-      .from('messages')
-      .insert({
-        sender_id: currentUser.id,
-        receiver_id: activeConvo.id,
-        content: messageInput.trim(),
-      })
+    if (activeIsRequest) {
+      // Send as a message request
+      await supabase
+        .from('messages')
+        .insert({
+          sender_id: currentUser.id,
+          receiver_id: activeConvo.id,
+          content: messageInput.trim(),
+          is_request: true,
+          request_status: 'pending',
+        })
+
+      alert('Message request sent. They will be able to accept or decline it.')
+      setActiveConvo(null)
+      setActiveIsRequest(false)
+    } else {
+      await supabase
+        .from('messages')
+        .insert({
+          sender_id: currentUser.id,
+          receiver_id: activeConvo.id,
+          content: messageInput.trim(),
+        })
+
+      await loadConversations(currentUser.id)
+    }
 
     setMessageInput('')
     setSending(false)
+  }
+
+  async function handleAcceptRequest(request) {
+    // Update request status
+    await supabase
+      .from('messages')
+      .update({ is_request: false, request_status: 'accepted' })
+      .eq('id', request.id)
+
+    await loadRequests(currentUser.id)
     await loadConversations(currentUser.id)
+    await openChat(currentUser, request.sender, false)
+    setActiveTab('messages')
+  }
+
+  async function handleDeclineRequest(request) {
+    await supabase
+      .from('messages')
+      .update({ request_status: 'declined' })
+      .eq('id', request.id)
+
+    await loadRequests(currentUser.id)
   }
 
   if (loading) return (
@@ -234,7 +319,7 @@ export default function Messages() {
         height: 'calc(100vh - 96px)',
       }}>
 
-        {/* Conversations sidebar */}
+        {/* Sidebar */}
         <div style={{
           width: '300px',
           flexShrink: 0,
@@ -245,91 +330,222 @@ export default function Messages() {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <div style={{
-            padding: '20px',
-            borderBottom: '1px solid var(--border)',
-          }}>
-            <h2 style={{
-              fontFamily: 'Playfair Display, serif',
-              fontSize: '20px',
-              fontWeight: '600',
-              color: 'var(--text)',
-            }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+            <button
+              onClick={() => setActiveTab('messages')}
+              style={{
+                flex: 1,
+                padding: '16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: activeTab === 'messages' ? 'var(--primary)' : 'var(--text-soft)',
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'messages' ? '2px solid var(--primary)' : '2px solid transparent',
+                cursor: 'pointer',
+              }}
+            >
               Messages
-            </h2>
+            </button>
+            <button
+              onClick={() => setActiveTab('requests')}
+              style={{
+                flex: 1,
+                padding: '16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: activeTab === 'requests' ? 'var(--primary)' : 'var(--text-soft)',
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'requests' ? '2px solid var(--primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                position: 'relative',
+              }}
+            >
+              Requests
+              {requests.length > 0 && (
+                <span style={{
+                  backgroundColor: 'var(--primary)',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '16px',
+                  height: '16px',
+                  fontSize: '10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '600',
+                  marginLeft: '6px',
+                }}>
+                  {requests.length}
+                </span>
+              )}
+            </button>
           </div>
 
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {conversations.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-soft)' }}>
-                <p style={{ fontSize: '24px', marginBottom: '12px' }}>💬</p>
-                <p style={{ fontSize: '14px' }}>No conversations yet.</p>
-                <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                  Follow someone and have them follow you back to message them.
-                </p>
-              </div>
-            ) : (
-              conversations.map(convo => (
-                <div
-                  key={convo.profile.id}
-                  onClick={() => openConversation(convo.profile)}
-                  style={{
-                    padding: '16px 20px',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid var(--border)',
-                    backgroundColor: activeConvo?.id === convo.profile.id ? 'var(--lavender)' : 'transparent',
-                    display: 'flex',
-                    gap: '12px',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--lavender)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '18px',
-                    flexShrink: 0,
-                  }}>
-                    🌸
+            {activeTab === 'messages' && (
+              <>
+                {conversations.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-soft)' }}>
+                    <p style={{ fontSize: '24px', marginBottom: '12px' }}>💬</p>
+                    <p style={{ fontSize: '14px' }}>No conversations yet.</p>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>
-                        {convo.profile.username}
-                      </p>
-                      {convo.unread > 0 && (
-                        <span style={{
-                          backgroundColor: 'var(--primary)',
-                          color: 'white',
+                ) : (
+                  conversations.map(convo => (
+                    <div
+                      key={convo.profile.id}
+                      onClick={() => openConversation(convo.profile)}
+                      style={{
+                        padding: '16px 20px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--border)',
+                        backgroundColor: activeConvo?.id === convo.profile.id ? 'var(--lavender)' : 'transparent',
+                        display: 'flex',
+                        gap: '12px',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--lavender)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '18px',
+                        flexShrink: 0,
+                      }}>
+                        🌸
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>
+                            {convo.profile.username}
+                          </p>
+                          {convo.unread > 0 && (
+                            <span style={{
+                              backgroundColor: 'var(--primary)',
+                              color: 'white',
+                              borderRadius: '50%',
+                              width: '18px',
+                              height: '18px',
+                              fontSize: '11px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: '600',
+                            }}>
+                              {convo.unread}
+                            </span>
+                          )}
+                        </div>
+                        <p style={{
+                          fontSize: '13px',
+                          color: 'var(--text-soft)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {convo.lastMessage.content}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+
+            {activeTab === 'requests' && (
+              <>
+                {requests.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-soft)' }}>
+                    <p style={{ fontSize: '24px', marginBottom: '12px' }}>📬</p>
+                    <p style={{ fontSize: '14px' }}>No message requests.</p>
+                  </div>
+                ) : (
+                  requests.map(request => (
+                    <div
+                      key={request.id}
+                      style={{
+                        padding: '16px 20px',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
                           borderRadius: '50%',
-                          width: '18px',
-                          height: '18px',
-                          fontSize: '11px',
+                          backgroundColor: 'var(--lavender)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontWeight: '600',
+                          fontSize: '16px',
+                          flexShrink: 0,
                         }}>
-                          {convo.unread}
-                        </span>
-                      )}
+                          🌸
+                        </div>
+                        <Link href={`/profile/${request.sender.username}`} style={{
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          color: 'var(--text)',
+                          textDecoration: 'none',
+                        }}>
+                          {request.sender.username}
+                        </Link>
+                      </div>
+                      <p style={{
+                        fontSize: '13px',
+                        color: 'var(--text-soft)',
+                        marginBottom: '12px',
+                        backgroundColor: 'var(--bg)',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        lineHeight: '1.5',
+                      }}>
+                        "{request.content}"
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => handleAcceptRequest(request)}
+                          style={{
+                            flex: 1,
+                            backgroundColor: 'var(--primary)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '8px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleDeclineRequest(request)}
+                          style={{
+                            flex: 1,
+                            backgroundColor: 'white',
+                            border: '2px solid var(--border)',
+                            borderRadius: '8px',
+                            padding: '8px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            color: 'var(--text)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Decline
+                        </button>
+                      </div>
                     </div>
-                    <p style={{
-                      fontSize: '13px',
-                      color: 'var(--text-soft)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {convo.lastMessage.content}
-                    </p>
-                  </div>
-                </div>
-              ))
+                  ))
+                )}
+              </>
             )}
           </div>
         </div>
@@ -388,6 +604,18 @@ export default function Messages() {
                 }}>
                   {activeConvo.username}
                 </Link>
+                {activeIsRequest && (
+                  <span style={{
+                    backgroundColor: 'var(--lavender)',
+                    color: 'var(--text)',
+                    borderRadius: '20px',
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                  }}>
+                    Message Request
+                  </span>
+                )}
               </div>
 
               <div style={{
@@ -400,6 +628,16 @@ export default function Messages() {
               }}>
                 {loadingMessages ? (
                   <p style={{ textAlign: 'center', color: 'var(--text-soft)' }}>Loading...</p>
+                ) : activeIsRequest ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-soft)', marginTop: '40px' }}>
+                    <p style={{ fontSize: '24px', marginBottom: '12px' }}>📬</p>
+                    <p style={{ fontSize: '14px', marginBottom: '4px' }}>
+                      Send one message to {activeConvo.username}.
+                    </p>
+                    <p style={{ fontSize: '13px' }}>
+                      They will be able to accept or decline your request.
+                    </p>
+                  </div>
                 ) : messages.length === 0 ? (
                   <div style={{ textAlign: 'center', color: 'var(--text-soft)', marginTop: '40px' }}>
                     <p style={{ fontSize: '24px', marginBottom: '12px' }}>🌸</p>
@@ -407,46 +645,46 @@ export default function Messages() {
                   </div>
                 ) : (
                   messages.map(msg => {
-                const isOwn = msg.sender_id === currentUser.id
-                return (
-                    <div key={msg.id} style={{
-                    display: 'flex',
-                    justifyContent: isOwn ? 'flex-end' : 'flex-start',
-                    alignItems: 'flex-end',
-                    gap: '6px',
-                    }}>
-                    {!isOwn && (
-                        <button
-                        onClick={() => setReportTarget({ userId: msg.sender_id, content: msg.content })}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            color: 'var(--text-soft)',
-                            padding: '4px',
-                            opacity: 0.5,
-                            flexShrink: 0,
-                        }}
-                        title="Report message"
-                        >
-                        ⚑
-                        </button>
-                    )}
-                    <div style={{
-                        maxWidth: '70%',
-                        backgroundColor: isOwn ? 'var(--primary)' : 'var(--bg)',
-                        color: isOwn ? 'white' : 'var(--text)',
-                        borderRadius: isOwn ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                        padding: '10px 16px',
-                        fontSize: '14px',
-                        lineHeight: '1.5',
-                    }}>
-                        {msg.content}
-                    </div>
-                    </div>
-                )
-                })
+                    const isOwn = msg.sender_id === currentUser.id
+                    return (
+                      <div key={msg.id} style={{
+                        display: 'flex',
+                        justifyContent: isOwn ? 'flex-end' : 'flex-start',
+                        alignItems: 'flex-end',
+                        gap: '6px',
+                      }}>
+                        {!isOwn && (
+                          <button
+                            onClick={() => setReportTarget({ userId: msg.sender_id, content: msg.content })}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              color: 'var(--text-soft)',
+                              padding: '4px',
+                              opacity: 0.5,
+                              flexShrink: 0,
+                            }}
+                            title="Report message"
+                          >
+                            ⚑
+                          </button>
+                        )}
+                        <div style={{
+                          maxWidth: '70%',
+                          backgroundColor: isOwn ? 'var(--primary)' : 'var(--bg)',
+                          color: isOwn ? 'white' : 'var(--text)',
+                          borderRadius: isOwn ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                          padding: '10px 16px',
+                          fontSize: '14px',
+                          lineHeight: '1.5',
+                        }}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    )
+                  })
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -460,7 +698,7 @@ export default function Messages() {
                     type="text"
                     value={messageInput}
                     onChange={e => setMessageInput(e.target.value)}
-                    placeholder="Send a message..."
+                    placeholder={activeIsRequest ? 'Send a message request...' : 'Send a message...'}
                     style={{
                       flex: 1,
                       padding: '10px 16px',
@@ -487,22 +725,22 @@ export default function Messages() {
                       opacity: sending || !messageInput.trim() ? 0.7 : 1,
                     }}
                   >
-                    Send
+                    {activeIsRequest ? 'Request' : 'Send'}
                   </button>
                 </form>
               </div>
             </>
           )}
         </div>
-    </div>
+      </div>
 
-    {reportTarget && (
-      <ReportModal
-        reportedUserId={reportTarget.userId}
-        messageContent={reportTarget.content}
-        onClose={() => setReportTarget(null)}
-      />
-    )}
-  </div>
+      {reportTarget && (
+        <ReportModal
+          reportedUserId={reportTarget.userId}
+          messageContent={reportTarget.content}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
+    </div>
   )
 }
