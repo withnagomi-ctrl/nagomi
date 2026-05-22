@@ -101,10 +101,22 @@ export default function ProfilePage() {
       setFollowerCount(prev => prev - 1)
     } else {
       await supabase
-        .from('follows')
-        .insert({ follower_id: currentUser.id, following_id: profile.id })
-      setIsFollowing(true)
-      setFollowerCount(prev => prev + 1)
+  .from('follows')
+  .insert({ follower_id: currentUser.id, following_id: profile.id })
+
+// Send notification
+await supabase
+  .from('notifications')
+  .insert({
+    user_id: profile.id,
+    type: 'follow',
+    content: `${currentProfile.username} started following you 🌸`,
+    link: `/profile/${currentProfile.username}`,
+    read: false,
+  })
+
+setIsFollowing(true)
+setFollowerCount(prev => prev + 1)
     }
   }
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import { createClient } from '../lib/supabase-client'
+import ReportModal from '../components/ReportModal'
 
 export default function Messages() {
   const supabase = createClient()
@@ -21,6 +22,7 @@ export default function Messages() {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [reportTarget, setReportTarget] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -405,26 +407,46 @@ export default function Messages() {
                   </div>
                 ) : (
                   messages.map(msg => {
-                    const isOwn = msg.sender_id === currentUser.id
-                    return (
-                      <div key={msg.id} style={{
-                        display: 'flex',
-                        justifyContent: isOwn ? 'flex-end' : 'flex-start',
-                      }}>
-                        <div style={{
-                          maxWidth: '70%',
-                          backgroundColor: isOwn ? 'var(--primary)' : 'var(--bg)',
-                          color: isOwn ? 'white' : 'var(--text)',
-                          borderRadius: isOwn ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                          padding: '10px 16px',
-                          fontSize: '14px',
-                          lineHeight: '1.5',
-                        }}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    )
-                  })
+                const isOwn = msg.sender_id === currentUser.id
+                return (
+                    <div key={msg.id} style={{
+                    display: 'flex',
+                    justifyContent: isOwn ? 'flex-end' : 'flex-start',
+                    alignItems: 'flex-end',
+                    gap: '6px',
+                    }}>
+                    {!isOwn && (
+                        <button
+                        onClick={() => setReportTarget({ userId: msg.sender_id, content: msg.content })}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            color: 'var(--text-soft)',
+                            padding: '4px',
+                            opacity: 0.5,
+                            flexShrink: 0,
+                        }}
+                        title="Report message"
+                        >
+                        ⚑
+                        </button>
+                    )}
+                    <div style={{
+                        maxWidth: '70%',
+                        backgroundColor: isOwn ? 'var(--primary)' : 'var(--bg)',
+                        color: isOwn ? 'white' : 'var(--text)',
+                        borderRadius: isOwn ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        padding: '10px 16px',
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                    }}>
+                        {msg.content}
+                    </div>
+                    </div>
+                )
+                })
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -472,7 +494,15 @@ export default function Messages() {
             </>
           )}
         </div>
-      </div>
     </div>
+
+    {reportTarget && (
+      <ReportModal
+        reportedUserId={reportTarget.userId}
+        messageContent={reportTarget.content}
+        onClose={() => setReportTarget(null)}
+      />
+    )}
+  </div>
   )
 }

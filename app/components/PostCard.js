@@ -29,11 +29,25 @@ export default function PostCard({ post, currentUserId }) {
       setReactions(prev => prev.filter(r => r.id !== existing.id))
     } else {
       const { data } = await supabase
-        .from('reactions')
-        .insert({ post_id: post.id, user_id: currentUserId, reaction_type: reactionType })
-        .select()
-        .single()
-      if (data) setReactions(prev => [...prev, data])
+  .from('reactions')
+  .insert({ post_id: post.id, user_id: currentUserId, reaction_type: reactionType })
+  .select()
+  .single()
+
+if (data && post.user_id !== currentUserId) {
+  const reactionLabel = reactionTypes.find(r => r.type === reactionType)?.label || reactionType
+  await supabase
+    .from('notifications')
+    .insert({
+      user_id: post.user_id,
+      type: 'reaction',
+      content: `Someone reacted "${reactionLabel}" to your post 🫀`,
+      link: `/anime/${post.anime?.slug || ''}`,
+      read: false,
+    })
+}
+
+if (data) setReactions(prev => [...prev, data])
     }
   }
 

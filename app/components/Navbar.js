@@ -4,12 +4,16 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { createClient } from '../lib/supabase-client'
 import { useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 
 export default function Navbar() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [unreadNotifs, setUnreadNotifs] = useState(0)
+  const [unreadMessages, setUnreadMessages] = useState(0)
   const router = useRouter()
   const supabase = createClient()
+  const pathname = usePathname()
 
   useEffect(() => {
     async function getUser() {
@@ -24,6 +28,20 @@ export default function Navbar() {
           .single()
         setProfile(profile)
       }
+      // Get unread notification count
+        const { count: notifCount } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('read', false)
+        setUnreadNotifs(notifCount || 0)
+
+        const { count: msgCount } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('receiver_id', user.id)
+            .eq('read', false)
+        setUnreadMessages(msgCount || 0)
     }
 
     getUser()
@@ -44,6 +62,29 @@ export default function Navbar() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+  async function refreshCounts() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { count: notifCount } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('read', false)
+    setUnreadNotifs(notifCount || 0)
+
+    const { count: msgCount } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('receiver_id', user.id)
+      .eq('read', false)
+    setUnreadMessages(msgCount || 0)
+  }
+
+  refreshCounts()
+}, [pathname])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -100,12 +141,66 @@ export default function Navbar() {
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         {user && profile ? (
           <>
-            <Link href="/notifications" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
-              🔔
-            </Link>
-            <Link href="/messages" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
-              💬
-            </Link>
+            <Link href="/notifications" style={{
+                color: 'var(--text-soft)',
+                textDecoration: 'none',
+                fontSize: '14px',
+                fontWeight: '500',
+                position: 'relative',
+                display: 'inline-flex',
+                alignItems: 'center',
+                }}>
+                🔔
+                {unreadNotifs > 0 && (
+                    <span style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '-8px',
+                    backgroundColor: 'var(--primary)',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '16px',
+                    height: '16px',
+                    fontSize: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: '600',
+                    }}>
+                    {unreadCount}
+                    </span>
+                )}
+                </Link>
+            <Link href="/messages" style={{
+  color: 'var(--text-soft)',
+  textDecoration: 'none',
+  fontSize: '14px',
+  fontWeight: '500',
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+}}>
+  💬
+  {unreadMessages > 0 && (
+    <span style={{
+      position: 'absolute',
+      top: '-6px',
+      right: '-8px',
+      backgroundColor: 'var(--primary)',
+      color: 'white',
+      borderRadius: '50%',
+      width: '16px',
+      height: '16px',
+      fontSize: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontWeight: '600',
+    }}>
+      {unreadMessages}
+    </span>
+  )}
+</Link>
             <Link href={`/profile/${profile.username}`} style={{
               backgroundColor: 'var(--lavender)',
               color: 'var(--text)',

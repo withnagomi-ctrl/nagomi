@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Navbar from '../../components/Navbar'
 import PostCard from '../../components/PostCard'
 import { createClient } from '../../lib/supabase-client'
+import ReportModal from '../../components/ReportModal'
 
 const moodRooms = [
   { name: 'I Feel Empty', slug: 'empty', emoji: '🕳️', desc: 'For when real life feels too quiet after the ending.', mood: 'Empty' },
@@ -43,6 +44,7 @@ export default function MoodRoom() {
   const [postContent, setPostContent] = useState('')
   const [postMood, setPostMood] = useState(room?.mood || '')
   const [submitting, setSubmitting] = useState(false)
+  const [reportTarget, setReportTarget] = useState(null)
 
   const moodOptions = [
     'Empty', 'Heartbroken', 'Wholesome', 'Happy',
@@ -356,23 +358,42 @@ export default function MoodRoom() {
                     🌸
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '3px' }}>
-                      <Link href={`/profile/${msg.username}`} style={{
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        color: 'var(--text)',
-                        textDecoration: 'none',
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '3px', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+                        <Link href={`/profile/${msg.username}`} style={{
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            color: 'var(--text)',
+                            textDecoration: 'none',
                         }}>
-                        {msg.username}
-                      </Link>
-                      <span style={{ fontSize: '11px', color: 'var(--text-soft)' }}>
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                            {msg.username}
+                        </Link>
+                        <span style={{ fontSize: '11px', color: 'var(--text-soft)' }}>
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        </div>
+                        {currentUser && msg.user_id !== currentUser.id && (
+                        <button
+                            onClick={() => setReportTarget({ userId: msg.user_id, content: msg.content })}
+                            style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            color: 'var(--text-soft)',
+                            padding: '2px 4px',
+                            opacity: 0.5,
+                            }}
+                            title="Report message"
+                        >
+                            ⚑
+                        </button>
+                        )}
                     </div>
                     <p style={{ fontSize: '14px', color: 'var(--text)', lineHeight: '1.5' }}>
-                      {msg.content}
+                        {msg.content}
                     </p>
-                  </div>
+                    </div>
                 </div>
               ))
             )}
@@ -579,6 +600,14 @@ export default function MoodRoom() {
           </div>
         )}
       </div>
+
+      {reportTarget && (
+        <ReportModal
+          reportedUserId={reportTarget.userId}
+          messageContent={reportTarget.content}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </div>
   )
 }
