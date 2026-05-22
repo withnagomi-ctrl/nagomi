@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Navbar from '../../components/Navbar'
 import PostCard from '../../components/PostCard'
@@ -21,42 +21,149 @@ const moodRooms = [
   { name: 'Comfort Romance', slug: 'comfort', emoji: '🫂', desc: 'Warm, safe, rewatch forever.', mood: 'Healing' },
 ]
 
-const moodOptions = [
-  'Empty', 'Heartbroken', 'Wholesome', 'Happy',
-  'Emotionally Destroyed', 'Healing', 'Bittersweet', 'Warm',
-]
-
 export default function MoodRoom() {
   const { mood } = useParams()
   const router = useRouter()
   const supabase = createClient()
+  const channelRef = useRef(null)
+  const messagesEndRef = useRef(null)
 
   const room = moodRooms.find(r => r.slug === mood)
 
+  const [messages, setMessages] = useState([])
   const [posts, setPosts] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
+  const [currentProfile, setCurrentProfile] = useState(null)
+  const [onlineCount, setOnlineCount] = useState(0)
+  const [messageInput, setMessageInput] = useState('')
+  const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showPostForm, setShowPostForm] = useState(false)
   const [postContent, setPostContent] = useState('')
   const [postMood, setPostMood] = useState(room?.mood || '')
   const [submitting, setSubmitting] = useState(false)
 
+  const moodOptions = [
+    'Empty', 'Heartbroken', 'Wholesome', 'Happy',
+    'Emotionally Destroyed', 'Healing', 'Bittersweet', 'Warm',
+  ]
+
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUser(user)
-      await loadPosts()
-      setLoading(false)
+  let presenceInterval
+  let countInterval
+  let currentChannel
+  let cancelled = false
+  const presenceKey = `guest_${Math.random().toString(36).slice(2)}`
+
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (cancelled) return
+
+    setCurrentUser(user)
+    const finalKey = user?.id || presenceKey
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single()
+      if (!cancelled) setCurrentProfile(profile)
     }
-    load()
-  }, [mood])
+
+    const { data: recentMessages } = await supabase
+      .from('mood_messages')
+      .select('*')
+      .eq('room_slug', mood)
+      .order('created_at', { ascending: true })
+      .limit(100)
+
+    if (!cancelled) setMessages(recentMessages || [])
+    if (!cancelled) await loadPosts()
+    if (!cancelled) setLoading(false)
+
+    await supabase
+      .from('room_presence')
+      .upsert({
+        room_slug: mood,
+        user_id: finalKey,
+        last_seen: new Date().toISOString(),
+      }, { onConflict: 'room_slug,user_id' })
+
+    presenceInterval = setInterval(async () => {
+      await supabase
+        .from('room_presence')
+        .upsert({
+          room_slug: mood,
+          user_id: finalKey,
+          last_seen: new Date().toISOString(),
+        }, { onConflict: 'room_slug,user_id' })
+    }, 60000)
+
+    async function refreshCount() {
+      if (cancelled) return
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+      const { data } = await supabase
+        .from('room_presence')
+        .select('user_id')
+        .eq('room_slug', mood)
+        .gte('last_seen', twoMinutesAgo)
+      if (!cancelled) setOnlineCount(data?.length || 1)
+    }
+
+    refreshCount()
+    countInterval = setInterval(refreshCount, 15000)
+
+    // Create channel and add listener BEFORE subscribing
+    const channelName = `mood-room-${mood}-${Date.now()}`
+    currentChannel = supabase.channel(channelName)
+
+    currentChannel.on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'mood_messages',
+        filter: `room_slug=eq.${mood}`,
+      },
+      (payload) => {
+        if (!cancelled) setMessages(prev => [...prev, payload.new])
+      }
+    )
+
+    currentChannel.subscribe()
+    channelRef.current = currentChannel
+
+    window.addEventListener('beforeunload', () => {
+      supabase.from('room_presence').delete()
+        .eq('room_slug', mood).eq('user_id', finalKey).then()
+    })
+  }
+
+  load()
+
+  return () => {
+    cancelled = true
+    clearInterval(presenceInterval)
+    clearInterval(countInterval)
+    if (currentChannel) {
+      supabase.removeChannel(currentChannel)
+    }
+  }
+}, [mood])
+
+  useEffect(() => {
+  if (messagesEndRef.current) {
+    messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+}, [messages])
 
   async function loadPosts() {
     let query = supabase
       .from('posts')
       .select('*, profiles(username, avatar_url), reactions(*), anime(title, slug)')
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(20)
 
     if (room?.mood) {
       query = query.eq('mood', room.mood)
@@ -64,6 +171,30 @@ export default function MoodRoom() {
 
     const { data } = await query
     setPosts(data || [])
+  }
+
+  async function handleSendMessage(e) {
+    e.preventDefault()
+    if (!messageInput.trim()) return
+
+    if (!currentUser) {
+      router.push('/login')
+      return
+    }
+
+    setSending(true)
+
+    await supabase
+      .from('mood_messages')
+      .insert({
+        room_slug: mood,
+        user_id: currentUser.id,
+        username: currentProfile?.username || 'anonymous',
+        content: messageInput.trim(),
+      })
+
+    setMessageInput('')
+    setSending(false)
   }
 
   async function handlePost(e) {
@@ -112,29 +243,216 @@ export default function MoodRoom() {
       {/* Header */}
       <div style={{
         backgroundColor: 'var(--lavender)',
-        padding: '60px 24px',
+        padding: '40px 24px',
         textAlign: 'center',
         borderBottom: '1px solid var(--border)',
       }}>
-        <p style={{ fontSize: '48px', marginBottom: '16px' }}>{room.emoji}</p>
+        <p style={{ fontSize: '40px', marginBottom: '12px' }}>{room.emoji}</p>
         <h1 style={{
           fontFamily: 'Playfair Display, serif',
-          fontSize: '36px',
+          fontSize: '32px',
           fontWeight: '600',
           color: 'var(--text)',
-          marginBottom: '12px',
+          marginBottom: '8px',
         }}>
           {room.name}
         </h1>
-        <p style={{ fontSize: '16px', color: 'var(--text-soft)', maxWidth: '480px', margin: '0 auto' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-soft)', marginBottom: '12px' }}>
           {room.desc}
         </p>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: 'white',
+          border: '1px solid var(--border)',
+          borderRadius: '20px',
+          padding: '6px 16px',
+          fontSize: '14px',
+          fontWeight: '500',
+          color: 'var(--text)',
+        }}>
+          <span style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: '#4ade80',
+            display: 'inline-block',
+          }} />
+          {onlineCount} {onlineCount === 1 ? 'person' : 'people'} here now
+        </div>
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: '720px', margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 24px' }}>
 
-        {/* Post button */}
+        {/* Live chat section */}
+        <div style={{
+          backgroundColor: 'white',
+          border: '1px solid var(--border)',
+          borderRadius: '20px',
+          marginBottom: '40px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#4ade80',
+              display: 'inline-block',
+            }} />
+            <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>
+              Live Chat
+            </span>
+            <span style={{ fontSize: '13px', color: 'var(--text-soft)' }}>
+              — talk with people feeling the same right now
+            </span>
+          </div>
+
+          {/* Messages */}
+          <div style={{
+            height: '380px',
+            overflowY: 'auto',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}>
+            {loading ? (
+              <p style={{ textAlign: 'center', color: 'var(--text-soft)', marginTop: '40px' }}>
+                Connecting...
+              </p>
+            ) : messages.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-soft)', marginTop: '60px' }}>
+                <p style={{ fontSize: '28px', marginBottom: '12px' }}>{room.emoji}</p>
+                <p style={{ fontSize: '15px' }}>No one has said anything yet.</p>
+                <p style={{ fontSize: '14px', marginTop: '4px' }}>Be the first to share how you're feeling.</p>
+              </div>
+            ) : (
+              messages.map(msg => (
+                <div key={msg.id} style={{
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'flex-start',
+                }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--lavender)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    flexShrink: 0,
+                  }}>
+                    🌸
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '3px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text)' }}>
+                        {msg.username}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-soft)' }}>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '14px', color: 'var(--text)', lineHeight: '1.5' }}>
+                      {msg.content}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Message input */}
+          <div style={{
+            padding: '16px 20px',
+            borderTop: '1px solid var(--border)',
+          }}>
+            {currentUser ? (
+              <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="text"
+                  value={messageInput}
+                  onChange={e => setMessageInput(e.target.value)}
+                  placeholder="Share how you're feeling..."
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    borderRadius: '20px',
+                    border: '2px solid var(--border)',
+                    fontSize: '14px',
+                    color: 'var(--text)',
+                    outline: 'none',
+                    backgroundColor: 'var(--bg)',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !messageInput.trim()}
+                  style={{
+                    backgroundColor: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '20px',
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: sending ? 'not-allowed' : 'pointer',
+                    opacity: sending || !messageInput.trim() ? 0.7 : 1,
+                  }}
+                >
+                  Send
+                </button>
+              </form>
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '14px', color: 'var(--text-soft)', marginBottom: '10px' }}>
+                  Join the conversation
+                </p>
+                <button
+                  onClick={() => router.push('/login')}
+                  style={{
+                    backgroundColor: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '20px',
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Log in to chat
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recovery posts section */}
+        <h2 style={{
+          fontFamily: 'Playfair Display, serif',
+          fontSize: '24px',
+          fontWeight: '600',
+          color: 'var(--text)',
+          marginBottom: '8px',
+        }}>
+          Recovery Posts
+        </h2>
+        <p style={{ fontSize: '14px', color: 'var(--text-soft)', marginBottom: '20px' }}>
+          Longer thoughts, recommendations, and comfort posts from the community.
+        </p>
+
         {!showPostForm && (
           <button
             onClick={() => currentUser ? setShowPostForm(true) : router.push('/login')}
@@ -151,11 +469,10 @@ export default function MoodRoom() {
               marginBottom: '24px',
             }}
           >
-            {room.emoji} Share how you're feeling...
+            {room.emoji} Write a longer post or ask for recommendations...
           </button>
         )}
 
-        {/* Post form */}
         {showPostForm && (
           <div style={{
             backgroundColor: 'white',
@@ -167,7 +484,7 @@ export default function MoodRoom() {
             <textarea
               value={postContent}
               onChange={e => setPostContent(e.target.value)}
-              placeholder="Share how you're feeling..."
+              placeholder="Share how you're feeling, ask for recommendations, or leave a comfort post..."
               style={{
                 width: '100%',
                 minHeight: '120px',
@@ -182,7 +499,6 @@ export default function MoodRoom() {
                 marginBottom: '16px',
               }}
             />
-
             <select
               value={postMood}
               onChange={e => setPostMood(e.target.value)}
@@ -241,13 +557,9 @@ export default function MoodRoom() {
           </div>
         )}
 
-        {/* Posts */}
-        {loading ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '40px' }}>Loading...</p>
-        ) : posts.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-soft)' }}>
-            <p style={{ fontSize: '32px', marginBottom: '16px' }}>{room.emoji}</p>
-            <p style={{ fontSize: '16px' }}>No posts yet. Be the first to share.</p>
+        {posts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-soft)' }}>
+            <p style={{ fontSize: '15px' }}>No posts yet. Be the first to share.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

@@ -84,6 +84,21 @@ export default function PostCard({ post, currentUserId }) {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {post.anime && (
+            <Link href={`/anime/${post.anime.slug}`} style={{ textDecoration: 'none' }}>
+                <p style={{
+                fontSize: '13px',
+                color: 'var(--primary)',
+                fontWeight: '500',
+                marginBottom: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                }}>
+                {post.anime.title}
+                </p>
+            </Link>
+          )}
           {post.mood && (
             <span style={{
               backgroundColor: 'var(--lavender)',

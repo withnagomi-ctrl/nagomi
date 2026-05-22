@@ -1,5 +1,9 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Navbar from '../components/Navbar'
+import { createClient } from '../lib/supabase-client'
 
 const moodRooms = [
   { name: 'I Feel Empty', slug: 'empty', emoji: '🕳️', desc: 'For when real life feels too quiet after the ending.' },
@@ -17,6 +21,35 @@ const moodRooms = [
 ]
 
 export default function MoodsPage() {
+  const [presenceCounts, setPresenceCounts] = useState({})
+  const supabase = createClient()
+
+  useEffect(() => {
+    async function loadCounts() {
+      // Only count users seen in the last 2 minutes as online
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+
+      const { data } = await supabase
+        .from('room_presence')
+        .select('room_slug')
+        .gte('last_seen', twoMinutesAgo)
+
+      if (data) {
+        const counts = {}
+        data.forEach(row => {
+          counts[row.room_slug] = (counts[row.room_slug] || 0) + 1
+        })
+        setPresenceCounts(counts)
+      }
+    }
+
+    loadCounts()
+
+    // Refresh counts every 15 seconds
+    const interval = setInterval(loadCounts, 15000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }}>
       <Navbar />
@@ -40,39 +73,63 @@ export default function MoodsPage() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           gap: '16px',
         }}>
-          {moodRooms.map(room => (
-            <Link
-              key={room.slug}
-              href={`/moods/${room.slug}`}
-              style={{ textDecoration: 'none' }}
-            >
-              <div style={{
-                backgroundColor: 'white',
-                border: '1px solid var(--border)',
-                borderRadius: '16px',
-                padding: '24px',
-                cursor: 'pointer',
-                height: '100%',
-              }}>
-                <p style={{ fontSize: '32px', marginBottom: '12px' }}>{room.emoji}</p>
-                <h3 style={{
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: 'var(--text)',
-                  marginBottom: '8px',
+          {moodRooms.map(room => {
+            const count = presenceCounts[room.slug] || 0
+            return (
+              <Link
+                key={room.slug}
+                href={`/moods/${room.slug}`}
+                style={{ textDecoration: 'none' }}
+              >
+                <div style={{
+                  backgroundColor: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  cursor: 'pointer',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}>
-                  {room.name}
-                </h3>
-                <p style={{
-                  fontSize: '13px',
-                  color: 'var(--text-soft)',
-                  lineHeight: '1.6',
-                }}>
-                  {room.desc}
-                </p>
-              </div>
-            </Link>
-          ))}
+                  <p style={{ fontSize: '32px', marginBottom: '12px' }}>{room.emoji}</p>
+                  <h3 style={{
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: 'var(--text)',
+                    marginBottom: '8px',
+                  }}>
+                    {room.name}
+                  </h3>
+                  <p style={{
+                    fontSize: '13px',
+                    color: 'var(--text-soft)',
+                    lineHeight: '1.6',
+                    flex: 1,
+                    marginBottom: '16px',
+                  }}>
+                    {room.desc}
+                  </p>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    color: count > 0 ? '#16a34a' : 'var(--text-soft)',
+                  }}>
+                    <span style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      backgroundColor: count > 0 ? '#4ade80' : 'var(--border)',
+                      display: 'inline-block',
+                    }} />
+                    {count > 0 ? `${count} online now` : 'No one online yet'}
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
     </div>
