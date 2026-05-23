@@ -103,7 +103,6 @@ export default function AdminDashboard() {
   async function banUser(userId) {
     const confirmed = window.confirm('Are you sure you want to ban this user? This will delete their account.')
     if (!confirmed) return
-
     await supabase.auth.admin.deleteUser(userId)
     await supabase.from('profiles').delete().eq('id', userId)
     await loadUsers()
@@ -196,7 +195,7 @@ export default function AdminDashboard() {
           borderBottom: '1px solid var(--border)',
           marginBottom: '32px',
         }}>
-          {['reports', 'users', 'posts'].map(tab => (
+          {['reports', 'users', 'posts', 'moodrooms'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -209,10 +208,9 @@ export default function AdminDashboard() {
                 border: 'none',
                 borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
                 cursor: 'pointer',
-                textTransform: 'capitalize',
               }}
             >
-              {tab}
+              {tab === 'moodrooms' ? 'Mood Rooms' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               {tab === 'reports' && stats.reportCount > 0 && (
                 <span style={{
                   backgroundColor: '#e85555',
@@ -447,6 +445,91 @@ export default function AdminDashboard() {
             ))}
           </div>
         )}
+
+        {/* Mood Rooms */}
+        {activeTab === 'moodrooms' && (
+          <div>
+            <h2 style={sectionTitle}>Mood Room Messages</h2>
+            <p style={{ fontSize: '14px', color: 'var(--text-soft)', marginBottom: '24px' }}>
+              Clear live chat messages from mood rooms.
+            </p>
+
+            <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', marginBottom: '4px' }}>
+                  All Mood Rooms
+                </p>
+                <p style={{ fontSize: '13px', color: 'var(--text-soft)' }}>
+                  Delete every message from every mood room instantly.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  const confirmed = window.confirm('Are you sure you want to delete ALL messages from ALL mood rooms? This cannot be undone.')
+                  if (!confirmed) return
+                  await supabase.from('mood_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                  alert('All mood room messages deleted.')
+                }}
+                style={{
+                  backgroundColor: '#e85555',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: 'white',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                Clear All
+              </button>
+            </div>
+
+            {[
+              { name: 'I Feel Empty', slug: 'empty' },
+              { name: 'I Need Wholesome Romance', slug: 'wholesome' },
+              { name: 'I Want to Cry', slug: 'want-to-cry' },
+              { name: 'I Need a Happy Ending', slug: 'happy-ending' },
+              { name: 'I Need Actual Dating', slug: 'actual-dating' },
+              { name: 'I Hate Love Triangles', slug: 'no-love-triangles' },
+              { name: 'I Want Slow Burn', slug: 'slow-burn' },
+              { name: 'I Need Something Healing', slug: 'healing' },
+              { name: 'I Need People to Talk To', slug: 'need-to-talk' },
+              { name: 'Emotionally Destroyed', slug: 'emotionally-destroyed' },
+              { name: 'Post-Anime Depression', slug: 'post-anime-depression' },
+              { name: 'Comfort Romance', slug: 'comfort' },
+            ].map(room => (
+              <div key={room.slug} style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text)' }}>
+                  {room.name}
+                </p>
+                <button
+                  onClick={async () => {
+                    const confirmed = window.confirm(`Delete all messages from "${room.name}"? This cannot be undone.`)
+                    if (!confirmed) return
+                    await supabase.from('mood_messages').delete().eq('room_slug', room.slug)
+                    alert(`Messages cleared from ${room.name}.`)
+                  }}
+                  style={{
+                    backgroundColor: '#ffe4e4',
+                    border: '2px solid #e85555',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#e85555',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
     </div>
   )

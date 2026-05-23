@@ -76,12 +76,20 @@ export default function MoodRoom() {
       if (!cancelled) setCurrentProfile(profile)
     }
 
+    // Clean up messages older than 24 hours
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    await supabase
+    .from('mood_messages')
+    .delete()
+    .eq('room_slug', mood)
+    .lt('created_at', twentyFourHoursAgo)
+
     const { data: recentMessages } = await supabase
-      .from('mood_messages')
-      .select('*')
-      .eq('room_slug', mood)
-      .order('created_at', { ascending: true })
-      .limit(100)
+    .from('mood_messages')
+    .select('*')
+    .eq('room_slug', mood)
+    .order('created_at', { ascending: true })
+    .limit(100)
 
     if (!cancelled) setMessages(recentMessages || [])
     if (!cancelled) await loadPosts()
