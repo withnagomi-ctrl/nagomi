@@ -135,8 +135,11 @@ export default function Navbar() {
           Mood Rooms
         </Link>
         <Link href="/recommendations" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
-          Recommendations
-        </Link>
+            Recommendations
+            </Link>
+            <Link href="/seasonal" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
+            Release Calendar
+            </Link>
       </div>
 
       {/* Auth */}
