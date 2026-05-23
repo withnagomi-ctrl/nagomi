@@ -47,6 +47,7 @@ export default function MoodRoom() {
   const [postMood, setPostMood] = useState(room?.mood || '')
   const [submitting, setSubmitting] = useState(false)
   const [reportTarget, setReportTarget] = useState(null)
+  const [blurSpoilers, setBlurSpoilers] = useState(true)
 
   const moodOptions = [
     'Empty', 'Heartbroken', 'Wholesome', 'Happy',
@@ -75,6 +76,15 @@ export default function MoodRoom() {
         .single()
       if (!cancelled) setCurrentProfile(profile)
     }
+
+    if (user) {
+        const { data: userPref } = await supabase
+            .from('profiles')
+            .select('blur_spoilers')
+            .eq('id', user.id)
+            .single()
+        setBlurSpoilers(userPref?.blur_spoilers ?? true)
+        }
 
     // Clean up messages older than 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -616,7 +626,8 @@ export default function MoodRoom() {
                 key={post.id}
                 post={post}
                 currentUserId={currentUser?.id}
-              />
+                blurSpoilers={blurSpoilers}
+                />
             ))}
           </div>
         )}

@@ -22,6 +22,13 @@ export default function ProfilePage() {
   const [isBlocked, setIsBlocked] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
 
+    function isOnline(lastSeen, showStatus) {
+    if (!showStatus) return false
+    if (!lastSeen) return false
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    return new Date(lastSeen) > fiveMinutesAgo
+    }
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -107,8 +114,20 @@ export default function ProfilePage() {
 
   async function handleFollow() {
     if (!currentUser) {
-      router.push('/login')
-      return
+        router.push('/login')
+        return
+    }
+
+    // Check their follow preference
+    const { data: targetPref } = await supabase
+        .from('profiles')
+        .select('who_can_follow')
+        .eq('id', profile.id)
+        .single()
+
+    if (targetPref?.who_can_follow === 'nobody' && !isFollowing) {
+        alert('This user is not accepting followers.')
+        return
     }
 
     if (isFollowing) {
@@ -214,21 +233,34 @@ setFollowerCount(prev => prev + 1)
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               {/* Avatar */}
-              <div style={{
-                width: '72px',
-                height: '72px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--lavender)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '28px',
-                flexShrink: 0,
-              }}>
-                {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.username} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                ) : '🌸'}
-              </div>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{
+                    width: '72px',
+                    height: '72px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--lavender)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '28px',
+                }}>
+                    {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt={profile.username} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : '🌸'}
+                </div>
+                {isOnline(profile.last_seen, profile.show_online_status) && (
+                    <div style={{
+                    position: 'absolute',
+                    bottom: '2px',
+                    right: '2px',
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '50%',
+                    backgroundColor: '#4ade80',
+                    border: '2px solid white',
+                    }} />
+                )}
+                </div>
               <div>
                 <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', fontWeight: '600', color: 'var(--text)', marginBottom: '4px' }}>
                   {profile.username}
@@ -241,7 +273,7 @@ setFollowerCount(prev => prev + 1)
 
             {/* Action button */}
             {isOwnProfile ? (
-              <Link href="/settings" style={{
+            <Link href="/settings" style={{
                 backgroundColor: 'white',
                 border: '2px solid var(--border)',
                 borderRadius: '20px',
@@ -250,9 +282,9 @@ setFollowerCount(prev => prev + 1)
                 fontWeight: '500',
                 color: 'var(--text)',
                 textDecoration: 'none',
-              }}>
-                Edit profile
-              </Link>
+            }}>
+                ⚙️ Settings
+            </Link>
             ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                 <button onClick={handleFollow} style={{
@@ -338,13 +370,13 @@ setFollowerCount(prev => prev + 1)
 
           {/* Anime info */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-            {profile.favourite_anime?.length > 0 && (
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px' }}>💕</span>
-                <span style={{ fontSize: '14px', color: 'var(--text-soft)' }}>Favourite:</span>
-                <span style={{ fontSize: '14px', color: 'var(--text)', fontWeight: '500' }}>{profile.favourite_anime.join(', ')}</span>
-              </div>
-            )}
+            {profile.favourite_anime?.length > 0 && (profile.show_favourite_anime !== false || isOwnProfile) && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px' }}>💕</span>
+                    <span style={{ fontSize: '14px', color: 'var(--text-soft)' }}>Favourite:</span>
+                    <span style={{ fontSize: '14px', color: 'var(--text)', fontWeight: '500' }}>{profile.favourite_anime.join(', ')}</span>
+                </div>
+                )}
             {profile.anime_that_broke_me && (
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px' }}>💔</span>

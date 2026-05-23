@@ -27,6 +27,11 @@ export default function Navbar() {
           .eq('id', user.id)
           .single()
         setProfile(profile)
+        // Update last seen
+        await supabase
+        .from('profiles')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', user.id)
       }
       // Get unread notification count
         if (user) {
@@ -172,7 +177,7 @@ export default function Navbar() {
                     justifyContent: 'center',
                     fontWeight: '600',
                     }}>
-                    {unreadCount}
+                    {unreadNotifs}
                     </span>
                 )}
                 </Link>

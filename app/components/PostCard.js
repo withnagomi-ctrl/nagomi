@@ -14,8 +14,9 @@ const reactionTypes = [
   { type: 'added_to_list', label: 'Added to list', emoji: '📺' },
 ]
 
-export default function PostCard({ post, currentUserId }) {
+export default function PostCard({ post, currentUserId, blurSpoilers }) {
   const [deleted, setDeleted] = useState(false)
+  const [revealed, setRevealed] = useState(false)
   const [reactions, setReactions] = useState(post.reactions || [])
   const supabase = createClient()
 
@@ -159,14 +160,51 @@ if (data) setReactions(prev => [...prev, data])
       </div>
 
       {/* Content */}
-      <p style={{
+    {post.spoiler_level !== 'none' && blurSpoilers && !revealed ? (
+    <div style={{ position: 'relative', marginBottom: '16px' }}>
+        <p style={{
+        fontSize: '15px',
+        color: 'var(--text)',
+        lineHeight: '1.7',
+        filter: 'blur(6px)',
+        userSelect: 'none',
+        }}>
+        {post.content}
+        </p>
+        <div style={{
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        }}>
+        <button
+            onClick={() => setRevealed(true)}
+            style={{
+            backgroundColor: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '20px',
+            padding: '8px 20px',
+            fontSize: '13px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            }}
+        >
+            ⚠️ Reveal spoiler
+        </button>
+        </div>
+    </div>
+    ) : (
+    <p style={{
         fontSize: '15px',
         color: 'var(--text)',
         lineHeight: '1.7',
         marginBottom: '16px',
-      }}>
+    }}>
         {post.content}
-      </p>
+    </p>
+    )}
 
       {/* Reactions and actions */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>

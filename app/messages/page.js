@@ -75,24 +75,44 @@ export default function Messages() {
             .eq('following_id', user.id)
             .single()
 
-          if (iFollow && theyFollow) {
-            await openChat(user, targetProfile, false)
-          } else {
-            // Check if request already sent
-            const { data: existingRequest } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('sender_id', user.id)
-              .eq('receiver_id', targetProfile.id)
-              .eq('is_request', true)
-              .single()
+          // Check their messaging preference
+            const { data: targetFullProfile } = await supabase
+            .from('profiles')
+            .select('who_can_message')
+            .eq('id', targetProfile.id)
+            .single()
 
-            if (existingRequest) {
-              alert('You have already sent a message request to this user.')
-            } else {
-              await openChat(user, targetProfile, true)
+            const msgPref = targetFullProfile?.who_can_message || 'requests'
+
+            if (msgPref === 'nobody') {
+            alert('This user is not accepting messages.')
+            return
             }
-          }
+
+            if (msgPref === 'mutuals' && !(iFollow && theyFollow)) {
+            alert('This user only accepts messages from mutuals.')
+            return
+            }
+
+            if (iFollow && theyFollow) {
+            await openChat(user, targetProfile, false)
+            } else {
+            if (msgPref === 'everyone' || msgPref === 'requests') {
+                const { data: existingRequest } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('sender_id', user.id)
+                .eq('receiver_id', targetProfile.id)
+                .eq('is_request', true)
+                .single()
+
+                if (existingRequest) {
+                alert('You have already sent a message request to this user.')
+                } else {
+                await openChat(user, targetProfile, msgPref === 'requests' || !iFollow || !theyFollow)
+                }
+            }
+            }
         }
       }
     }

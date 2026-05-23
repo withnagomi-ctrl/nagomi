@@ -79,11 +79,21 @@ export default function AnimeRoom() {
   const [spoilerLevel, setSpoilerLevel] = useState('none')
   const [submitting, setSubmitting] = useState(false)
   const [showPostForm, setShowPostForm] = useState(false)
+  const [blurSpoilers, setBlurSpoilers] = useState(true)
 
   useEffect(() => {
     async function load() {
         const { data: { user } } = await supabase.auth.getUser()
         setCurrentUser(user)
+
+        if (user) {
+        const { data: userPref } = await supabase
+            .from('profiles')
+            .select('blur_spoilers')
+            .eq('id', user.id)
+            .single()
+        setBlurSpoilers(userPref?.blur_spoilers ?? true)
+        }
 
         // First check database
         const { data: existing } = await supabase
@@ -531,7 +541,8 @@ export default function AnimeRoom() {
                 key={post.id}
                 post={post}
                 currentUserId={currentUser?.id}
-              />
+                blurSpoilers={blurSpoilers}
+                />
             ))}
           </div>
         )}
