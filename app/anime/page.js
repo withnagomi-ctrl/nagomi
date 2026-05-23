@@ -25,7 +25,13 @@ export default function AnimePage() {
     try {
       const res = await fetch(`/api/anime/search?q=${encodeURIComponent(query)}`)
       const data = await res.json()
-      setResults(data.results || [])
+      const seen = new Set()
+        const unique = (data.results || []).filter(anime => {
+        if (seen.has(anime.mal_id)) return false
+        seen.add(anime.mal_id)
+        return true
+        })
+        setResults(unique)
     } catch (error) {
       console.error(error)
     }

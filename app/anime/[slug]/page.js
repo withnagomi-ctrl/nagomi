@@ -82,57 +82,118 @@ export default function AnimeRoom() {
 
   useEffect(() => {
     async function load() {
-  const { data: { user } } = await supabase.auth.getUser()
-  setCurrentUser(user)
+        const { data: { user } } = await supabase.auth.getUser()
+        setCurrentUser(user)
 
-  console.log('slug:', slug)
+        // First check database
+        const { data: existing } = await supabase
+            .from('anime')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle()
 
-  let { data: animeData, error: fetchError } = await supabase
-    .from('anime')
-    .select('*')
-    .eq('slug', slug)
-    .single()
+        if (existing) {
+            setAnime(existing)
+            await loadPosts(existing.id, 'After the Ending')
+            setLoading(false)
+            return
+        }
 
-  console.log('animeData from db:', animeData)
-  console.log('fetchError:', fetchError)
+        // Not in database — try query params first
+        const params = new URLSearchParams(window.location.search)
+        const mal_id = params.get('mal_id')
+        const title = params.get('title')
+        const image_url = params.get('image')
+        const year = params.get('year')
+        const synopsis = params.get('synopsis')
 
-  if (!animeData) {
-    const params = new URLSearchParams(window.location.search)
-    const mal_id = params.get('mal_id')
-    const title = params.get('title')
-    const image_url = params.get('image')
-    const year = params.get('year')
-    const synopsis = params.get('synopsis')
+        if (mal_id && title) {
+            const { data: inserted } = await supabase
+            .from('anime')
+            .insert({
+                mal_id: parseInt(mal_id),
+                title,
+                slug,
+                image_url,
+                synopsis,
+                year: year ? parseInt(year) : null,
+            })
+            .select()
+            .single()
 
-    console.log('params:', { mal_id, title, image_url, year })
+            if (inserted) {
+            setAnime(inserted)
+            await loadPosts(inserted.id, 'After the Ending')
+            setLoading(false)
+            return
+            }
 
-    if (mal_id && title) {
-      const { data: inserted, error: insertError } = await supabase
-        .from('anime')
-        .upsert({
-          mal_id: parseInt(mal_id),
-          title,
-          slug,
-          image_url,
-          synopsis,
-          year: year ? parseInt(year) : null,
-        }, { onConflict: 'slug' })
-        .select()
-        .single()
+            // Insert failed — row might already exist with slight slug difference, fetch it
+            const { data: fallback } = await supabase
+            .from('anime')
+            .select('*')
+            .eq('mal_id', parseInt(mal_id))
+            .maybeSingle()
 
-      console.log('inserted:', inserted)
-      console.log('insertError:', insertError)
+            if (fallback) {
+            setAnime(fallback)
+            await loadPosts(fallback.id, 'After the Ending')
+            setLoading(false)
+            return
+            }
+        }
 
-      animeData = inserted
-    }
-  }
+        // Last resort — fetch from Jikan
+        const searchTitle = slug.replace(/-/g, ' ')
+        try {
+            const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTitle)}&genres=22&limit=1&sfw=true`)
+            const data = await res.json()
+            const found = data.data?.[0]
 
-  setAnime(animeData)
-  if (animeData) {
-    await loadPosts(animeData.id, 'After the Ending')
-  }
-  setLoading(false)
-}
+            if (found) {
+            const newSlug = (found.title_english || found.title)
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+
+            const { data: inserted } = await supabase
+                .from('anime')
+                .insert({
+                mal_id: found.mal_id,
+                title: found.title_english || found.title,
+                slug: newSlug,
+                image_url: found.images?.jpg?.image_url,
+                synopsis: found.synopsis,
+                year: found.year,
+                })
+                .select()
+                .single()
+
+            if (inserted) {
+                setAnime(inserted)
+                await loadPosts(inserted.id, 'After the Ending')
+                setLoading(false)
+                return
+            }
+
+            // Already exists — fetch by mal_id
+            const { data: fallback } = await supabase
+                .from('anime')
+                .select('*')
+                .eq('mal_id', found.mal_id)
+                .maybeSingle()
+
+            if (fallback) {
+                setAnime(fallback)
+                await loadPosts(fallback.id, 'After the Ending')
+            }
+            }
+        } catch (err) {
+            console.error('Jikan fetch failed:', err)
+        }
+
+        setLoading(false)
+        }
 
     load()
   }, [slug])
@@ -178,16 +239,18 @@ export default function AnimeRoom() {
       return
     }
     if (!postContent.trim()) return
-        if (containsBannedWord(postContent)) {
-    alert('Your post contains inappropriate content.')
-    return
+
+    if (containsBannedWord(postContent)) {
+      alert('Your post contains inappropriate content.')
+      return
     }
 
     const { allowed, message } = await checkRateLimit(currentUser.id, 'post')
     if (!allowed) {
-    alert(message)
-    return
+      alert(message)
+      return
     }
+
     setSubmitting(true)
 
     let postType = 'Reaction'
@@ -277,7 +340,7 @@ export default function AnimeRoom() {
               </p>
             )}
             {anime.synopsis && (
-                <SynopsisText text={anime.synopsis} />
+              <SynopsisText text={anime.synopsis} />
             )}
           </div>
         </div>
@@ -321,7 +384,6 @@ export default function AnimeRoom() {
       {/* Content */}
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
 
-        {/* Post button */}
         {!showPostForm && (
           <button
             onClick={() => currentUser ? setShowPostForm(true) : router.push('/login')}
@@ -344,7 +406,6 @@ export default function AnimeRoom() {
           </button>
         )}
 
-        {/* Post form */}
         {showPostForm && (
           <div style={{
             backgroundColor: 'white',
@@ -377,7 +438,6 @@ export default function AnimeRoom() {
             />
 
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              {/* Mood selector */}
               <select
                 value={postMood}
                 onChange={e => setPostMood(e.target.value)}
@@ -398,7 +458,6 @@ export default function AnimeRoom() {
                 ))}
               </select>
 
-              {/* Spoiler selector */}
               <select
                 value={spoilerLevel}
                 onChange={e => setSpoilerLevel(e.target.value)}
@@ -456,7 +515,6 @@ export default function AnimeRoom() {
           </div>
         )}
 
-        {/* Posts */}
         {posts.length === 0 ? (
           <div style={{
             textAlign: 'center',
