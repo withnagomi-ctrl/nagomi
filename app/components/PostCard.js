@@ -39,16 +39,24 @@ export default function PostCard({ post, currentUserId, blurSpoilers }) {
   .single()
 
 if (data && post.user_id !== currentUserId) {
-  const reactionLabel = reactionTypes.find(r => r.type === reactionType)?.label || reactionType
-  await supabase
-    .from('notifications')
-    .insert({
-      user_id: post.user_id,
-      type: 'reaction',
-      content: `Someone reacted "${reactionLabel}" to your post 🫀`,
-      link: `/anime/${post.anime?.slug || ''}`,
-      read: false,
-    })
+  const { data: ownerPref } = await supabase
+    .from('profiles')
+    .select('notif_reactions')
+    .eq('id', post.user_id)
+    .single()
+
+  if (ownerPref?.notif_reactions !== false) {
+    const reactionLabel = reactionTypes.find(r => r.type === reactionType)?.label || reactionType
+    await supabase
+      .from('notifications')
+      .insert({
+        user_id: post.user_id,
+        type: 'reaction',
+        content: `Someone reacted "${reactionLabel}" to your post 🫀`,
+        link: `/anime/${post.anime?.slug || ''}`,
+        read: false,
+      })
+  }
 }
 
 if (data) setReactions(prev => [...prev, data])

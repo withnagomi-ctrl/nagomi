@@ -269,14 +269,32 @@ export default function Messages() {
       await supabase
         .from('messages')
         .insert({
-          sender_id: currentUser.id,
-          receiver_id: activeConvo.id,
-          content: messageInput.trim(),
-          is_request: true,
-          request_status: 'pending',
+            sender_id: currentUser.id,
+            receiver_id: activeConvo.id,
+            content: messageInput.trim(),
+            is_request: true,
+            request_status: 'pending',
         })
 
-      alert('Message request sent. They will be able to accept or decline it.')
+        const { data: msgPref } = await supabase
+        .from('profiles')
+        .select('notif_messages, username')
+        .eq('id', activeConvo.id)
+        .single()
+
+        if (msgPref?.notif_messages !== false) {
+        await supabase
+            .from('notifications')
+            .insert({
+            user_id: activeConvo.id,
+            type: 'message',
+            content: `${currentProfile.username} sent you a message request 💬`,
+            link: '/messages',
+            read: false,
+            })
+        }
+
+        alert('Message request sent. They will be able to accept or decline it.')
       setActiveConvo(null)
       setActiveIsRequest(false)
     } else {

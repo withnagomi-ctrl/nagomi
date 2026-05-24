@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '../components/Navbar'
@@ -11,8 +11,11 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
+  const channelRef = useRef(null)
 
   useEffect(() => {
+    let cancelled = false
+
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
 
@@ -28,8 +31,10 @@ export default function Notifications() {
         .order('created_at', { ascending: false })
         .limit(50)
 
-      setNotifications(data || [])
-      setLoading(false)
+      if (!cancelled) {
+        setNotifications(data || [])
+        setLoading(false)
+      }
 
       // Mark all as read
       await supabase
@@ -37,9 +42,46 @@ export default function Notifications() {
         .update({ read: true })
         .eq('user_id', user.id)
         .eq('read', false)
+
+      // Realtime listener for new notifications
+      const channel = supabase.channel(`notifications-${user.id}-${Date.now()}`)
+
+      channel.on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (!cancelled) {
+            setNotifications(prev => {
+              if (prev.some(n => n.id === payload.new.id)) return prev
+              return [payload.new, ...prev]
+            })
+            // Mark new notification as read immediately since we're on the page
+            supabase
+              .from('notifications')
+              .update({ read: true })
+              .eq('id', payload.new.id)
+              .then()
+          }
+        }
+      )
+
+      channel.subscribe()
+      channelRef.current = channel
     }
 
     load()
+
+    return () => {
+      cancelled = true
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+      }
+    }
   }, [])
 
   function getNotificationIcon(type) {

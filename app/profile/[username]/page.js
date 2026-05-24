@@ -144,15 +144,23 @@ export default function ProfilePage() {
   .insert({ follower_id: currentUser.id, following_id: profile.id })
 
 // Send notification
-await supabase
-  .from('notifications')
-  .insert({
-    user_id: profile.id,
-    type: 'follow',
-    content: `${currentProfile.username} started following you 🌸`,
-    link: `/profile/${currentProfile.username}`,
-    read: false,
-  })
+const { data: followPref } = await supabase
+  .from('profiles')
+  .select('notif_follows')
+  .eq('id', profile.id)
+  .single()
+
+if (followPref?.notif_follows !== false) {
+  await supabase
+    .from('notifications')
+    .insert({
+      user_id: profile.id,
+      type: 'follow',
+      content: `${currentProfile.username} started following you 🌸`,
+      link: `/profile/${currentProfile.username}`,
+      read: false,
+    })
+}
 
 setIsFollowing(true)
 setFollowerCount(prev => prev + 1)
