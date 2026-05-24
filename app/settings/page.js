@@ -223,10 +223,16 @@ export default function Settings() {
     const confirmed2 = window.confirm('This is permanent. Are you absolutely sure?')
     if (!confirmed2) return
 
-    await supabase.from('profiles').delete().eq('id', currentUser.id)
-    await supabase.auth.signOut()
-    router.push('/')
-  }
+    const res = await fetch('/api/delete-account', { method: 'DELETE' })
+    const data = await res.json()
+
+    if (data.success) {
+        await supabase.auth.signOut()
+        router.push('/')
+    } else {
+        setMessage({ type: 'error', text: 'Failed to delete account. Please try again.' })
+    }
+    }
 
   if (loading) return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }}>

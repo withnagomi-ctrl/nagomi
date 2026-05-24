@@ -18,9 +18,7 @@ export async function middleware(request) {
           cookiesToSet.forEach(({ name, value, options }) =>
             request.cookies.set(name, value, options)
           )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -29,9 +27,20 @@ export async function middleware(request) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Check if banned — skip for the banned page itself to avoid redirect loop
+  if (user && request.nextUrl.pathname !== '/banned') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_banned')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.is_banned) {
+      return NextResponse.redirect(new URL('/banned', request.url))
+    }
+  }
 
   const protectedRoutes = [
     '/profile',

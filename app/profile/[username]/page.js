@@ -6,6 +6,58 @@ import Link from 'next/link'
 import { createClient } from '../../lib/supabase-client'
 import Navbar from '../../components/Navbar'
 
+function FollowButton({ targetId, currentUserId, supabase }) {
+  const [following, setFollowing] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function check() {
+      const { data } = await supabase
+        .from('follows')
+        .select('*')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', targetId)
+        .single()
+      setFollowing(!!data)
+      setLoading(false)
+    }
+    check()
+  }, [targetId])
+
+  async function toggle() {
+    if (following) {
+      await supabase.from('follows').delete()
+        .eq('follower_id', currentUserId)
+        .eq('following_id', targetId)
+      setFollowing(false)
+    } else {
+      await supabase.from('follows').insert({
+        follower_id: currentUserId,
+        following_id: targetId,
+      })
+      setFollowing(true)
+    }
+  }
+
+  if (loading) return null
+
+  return (
+    <button onClick={toggle} style={{
+      backgroundColor: following ? 'white' : 'var(--primary)',
+      border: following ? '2px solid var(--border)' : 'none',
+      borderRadius: '20px',
+      padding: '6px 16px',
+      fontSize: '13px',
+      fontWeight: '500',
+      color: following ? 'var(--text)' : 'white',
+      cursor: 'pointer',
+      flexShrink: 0,
+    }}>
+      {following ? 'Following' : 'Follow'}
+    </button>
+  )
+}
+
 export default function ProfilePage() {
   const { username } = useParams()
   const router = useRouter()
@@ -21,6 +73,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [isBlocked, setIsBlocked] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [showFollowingModal, setShowFollowingModal] = useState(false)
+  const [followersList, setFollowersList] = useState([])
+  const [followingList, setFollowingList] = useState([])
+  const [loadingList, setLoadingList] = useState(false)
 
     function isOnline(lastSeen, showStatus) {
     if (!showStatus) return false
@@ -166,6 +223,26 @@ setIsFollowing(true)
 setFollowerCount(prev => prev + 1)
     }
   }
+
+  async function loadFollowers() {
+    setLoadingList(true)
+    const { data } = await supabase
+        .from('follows')
+        .select('follower_id, profiles!follows_follower_id_fkey(id, username, avatar_url, bio)')
+        .eq('following_id', profile.id)
+    setFollowersList(data || [])
+    setLoadingList(false)
+    }
+
+    async function loadFollowing() {
+    setLoadingList(true)
+    const { data } = await supabase
+        .from('follows')
+        .select('following_id, profiles!follows_following_id_fkey(id, username, avatar_url, bio)')
+        .eq('follower_id', profile.id)
+    setFollowingList(data || [])
+    setLoadingList(false)
+    }
 
   async function handleBlock() {
     if (!currentUser) return
@@ -363,18 +440,24 @@ setFollowerCount(prev => prev + 1)
           {/* Stats */}
           <div style={{ display: 'flex', gap: '32px', marginBottom: '24px' }}>
             <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)' }}>{posts.length}</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Posts</p>
+                <p style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)' }}>{posts.length}</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Posts</p>
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)' }}>{followerCount}</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Followers</p>
+            <div
+                style={{ textAlign: 'center', cursor: 'pointer' }}
+                onClick={() => { setShowFollowersModal(true); loadFollowers() }}
+            >
+                <p style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)' }}>{followerCount}</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-soft)', textDecoration: 'underline' }}>Followers</p>
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)' }}>{followingCount}</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Following</p>
+            <div
+                style={{ textAlign: 'center', cursor: 'pointer' }}
+                onClick={() => { setShowFollowingModal(true); loadFollowing() }}
+            >
+                <p style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)' }}>{followingCount}</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-soft)', textDecoration: 'underline' }}>Following</p>
             </div>
-          </div>
+            </div>
 
           {/* Anime info */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
@@ -493,6 +576,119 @@ setFollowerCount(prev => prev + 1)
           </div>
         )}
       </div>
+      {/* Followers Modal */}
+        {showFollowersModal && (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: '24px',
+        }}>
+            <div style={{
+            backgroundColor: 'white', borderRadius: '20px',
+            width: '100%', maxWidth: '420px', maxHeight: '80vh',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', fontWeight: '600', color: 'var(--text)' }}>
+                Followers
+                </h3>
+                <button onClick={() => setShowFollowersModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-soft)' }}>
+                ✕
+                </button>
+            </div>
+            <div style={{ overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {loadingList ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '20px' }}>Loading...</p>
+                ) : followersList.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '20px' }}>No followers yet.</p>
+                ) : (
+                followersList.map(f => (
+                    <div key={f.follower_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                    <Link
+                        href={`/profile/${f.profiles?.username}`}
+                        onClick={() => setShowFollowersModal(false)}
+                        style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', textDecoration: 'none', flex: 1 }}
+                    >
+                        🌸 {f.profiles?.username}
+                        {f.profiles?.bio && (
+                        <p style={{ fontSize: '12px', color: 'var(--text-soft)', fontWeight: '400', marginTop: '2px' }}>
+                            {f.profiles.bio.slice(0, 50)}{f.profiles.bio.length > 50 ? '...' : ''}
+                        </p>
+                        )}
+                    </Link>
+                    {currentUser && f.follower_id !== currentUser.id && (
+                        <FollowButton
+                        targetId={f.follower_id}
+                        targetUsername={f.profiles?.username}
+                        currentUserId={currentUser.id}
+                        supabase={supabase}
+                        />
+                    )}
+                    </div>
+                ))
+                )}
+            </div>
+            </div>
+        </div>
+        )}
+
+        {/* Following Modal */}
+        {showFollowingModal && (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: '24px',
+        }}>
+            <div style={{
+            backgroundColor: 'white', borderRadius: '20px',
+            width: '100%', maxWidth: '420px', maxHeight: '80vh',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', fontWeight: '600', color: 'var(--text)' }}>
+                Following
+                </h3>
+                <button onClick={() => setShowFollowingModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-soft)' }}>
+                ✕
+                </button>
+            </div>
+            <div style={{ overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {loadingList ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '20px' }}>Loading...</p>
+                ) : followingList.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '20px' }}>Not following anyone yet.</p>
+                ) : (
+                followingList.map(f => (
+                    <div key={f.following_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                    <Link
+                        href={`/profile/${f.profiles?.username}`}
+                        onClick={() => setShowFollowingModal(false)}
+                        style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', textDecoration: 'none', flex: 1 }}
+                    >
+                        🌸 {f.profiles?.username}
+                        {f.profiles?.bio && (
+                        <p style={{ fontSize: '12px', color: 'var(--text-soft)', fontWeight: '400', marginTop: '2px' }}>
+                            {f.profiles.bio.slice(0, 50)}{f.profiles.bio.length > 50 ? '...' : ''}
+                        </p>
+                        )}
+                    </Link>
+                    {currentUser && f.following_id !== currentUser.id && (
+                        <FollowButton
+                        targetId={f.following_id}
+                        targetUsername={f.profiles?.username}
+                        currentUserId={currentUser.id}
+                        supabase={supabase}
+                        />
+                    )}
+                    </div>
+                ))
+                )}
+            </div>
+            </div>
+        </div>
+        )}
     </div>
   )
 }
