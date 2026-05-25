@@ -53,31 +53,39 @@ const steps = [
 // Maps user selections to Jikan API parameters
 function buildJikanParams(finished, feeling, want) {
   const all = [...feeling, ...want]
-  const genres = ['22'] // 22 = Romance, always included
+  
+  let genres = ['22']
+  let orderBy = 'score'
+  let keyword = finished || ''
 
-  // Add genre modifiers based on selections
-  if (all.some(s => ['Something sadder', 'Heartbroken', 'Emotionally destroyed', 'Emotional damage'].includes(s))) {
-    genres.push('8') // Drama
-  }
-  if (all.some(s => ['Something happier', 'Wholesome and soft', 'Something healing'].includes(s))) {
-    genres.push('4') // Comedy
-  }
-  if (all.some(s => ['Slow burn', 'Bittersweet', 'Empty'].includes(s))) {
-    genres.push('8') // Drama
+  if (all.some(s => ['Something sadder', 'Heartbroken', 'Emotionally destroyed', 'Emotional damage', 'Bittersweet'].includes(s))) {
+    genres.push('8')
   }
 
-  // Build keyword from finished anime and want selections
-  let keyword = ''
-  if (all.includes('School romance')) keyword = 'school love'
-  else if (all.includes('Adult romance')) keyword = 'adult romance'
-  else if (all.includes('Slow burn')) keyword = 'slow burn romance'
-  else if (all.includes('Wholesome and soft')) keyword = 'wholesome romance'
-  else if (all.includes('Emotional damage')) keyword = 'emotional romance drama'
-  else if (finished) keyword = finished
+  if (all.some(s => ['Something happier', 'Wholesome and soft', 'Something healing', 'Warm and happy', 'Wholesome'].includes(s))) {
+    genres.push('4')
+  }
+
+  if (all.some(s => ['Something healing', 'Wholesome and soft'].includes(s))) {
+    genres.push('36')
+  }
+
+  if (all.includes('School romance')) {
+    keyword = keyword || 'school romance'
+  } else if (all.includes('Adult romance')) {
+    keyword = keyword || 'adult romance'
+  } else if (all.some(s => ['Slow burn', 'Bittersweet', 'Empty'].includes(s))) {
+    keyword = keyword || 'slow burn romance'
+  } else if (all.some(s => ['Wholesome and soft', 'Something healing'].includes(s))) {
+    keyword = keyword || 'wholesome romance'
+  } else if (all.some(s => ['Emotional damage', 'Emotionally destroyed'].includes(s))) {
+    keyword = keyword || 'emotional romance'
+  }
 
   return {
     genres: [...new Set(genres)].join(','),
     keyword,
+    orderBy,
   }
 }
 
@@ -86,6 +94,7 @@ export default function Recommendations() {
   const [answers, setAnswers] = useState({ finished: '', feeling: [], want: [] })
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [searching, setSearching] = useState(false)
 
   function handleInput(value) {
     setAnswers(prev => ({ ...prev, finished: value }))
@@ -105,33 +114,55 @@ export default function Recommendations() {
       setCurrentStep(prev => prev + 1)
     } else {
       setLoading(true)
-      const { genres, keyword } = buildJikanParams(answers.finished, answers.feeling, answers.want)
+      setSearching(true)
 
       try {
-        const url = `https://api.jikan.moe/v4/anime?genres=${genres}&q=${encodeURIComponent(keyword)}&order_by=score&sort=desc&limit=12&sfw=true`
-        const res = await fetch(url)
-        const data = await res.json()
+        const { genres, keyword, orderBy } = buildJikanParams(answers.finished, answers.feeling, answers.want)
+        
+        // Try with keyword first
+        let url = `https://api.jikan.moe/v4/anime?genres=${genres}&q=${encodeURIComponent(keyword)}&order_by=${orderBy}&sort=desc&limit=12&sfw=true`
+        let res = await fetch(url)
+        
+        // If rate limited or too few results, try without keyword
+        if (res.status === 429) {
+            await new Promise(r => setTimeout(r, 1000))
+            res = await fetch(url)
+        }
+        
+        let data = await res.json()
+        let results = data.data || []
+        
+        // If less than 4 results, try again with just genre and no keyword
+        if (results.length < 4) {
+            await new Promise(r => setTimeout(r, 500))
+            const fallbackUrl = `https://api.jikan.moe/v4/anime?genres=${genres}&order_by=score&sort=desc&limit=12&sfw=true`
+            const fallbackRes = await fetch(fallbackUrl)
+            const fallbackData = await fallbackRes.json()
+            results = fallbackData.data || []
+        }
 
-        const mapped = (data.data || []).map(anime => ({
-          mal_id: anime.mal_id,
-          title: anime.title_english || anime.title,
-          image: anime.images?.jpg?.image_url,
-          year: anime.year,
-          score: anime.score,
-          synopsis: anime.synopsis,
-          slug: (anime.title_english || anime.title)
+        const mapped = results.map(anime => ({
+            mal_id: anime.mal_id,
+            title: anime.title_english || anime.title,
+            image: anime.images?.jpg?.image_url,
+            year: anime.year,
+            score: anime.score,
+            synopsis: anime.synopsis,
+            slug: (anime.title_english || anime.title)
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, ''),
         }))
 
         setResults(mapped)
-      } catch (err) {
+        } catch (err) {
         console.error(err)
         setResults([])
-      }
+        setSearching(false)
+        }
 
       setLoading(false)
+      setSearching(false)
     }
   }
 
@@ -282,17 +313,19 @@ export default function Recommendations() {
 
         {/* Loading */}
         {loading && (
-          <div style={{
-            backgroundColor: 'white',
-            border: '1px solid var(--border)',
-            borderRadius: '24px',
-            padding: '80px 40px',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '40px', marginBottom: '16px' }}>🌸</p>
-            <p style={{ fontSize: '16px', color: 'var(--text-soft)' }}>Finding anime that matches how you feel...</p>
-          </div>
-        )}
+            <div style={{
+                backgroundColor: 'white',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '80px 40px',
+                textAlign: 'center',
+            }}>
+                <p style={{ fontSize: '40px', marginBottom: '16px' }}>🌸</p>
+                <p style={{ fontSize: '16px', color: 'var(--text-soft)' }}>
+                {searching ? 'Searching for anime that matches how you feel...' : 'Finding anime that matches how you feel...'}
+                </p>
+            </div>
+            )}
 
         {/* Results */}
         {results && !loading && (
@@ -339,10 +372,10 @@ export default function Recommendations() {
                 padding: '40px',
                 textAlign: 'center',
                 color: 'var(--text-soft)',
-              }}>
+                }}>
                 <p style={{ fontSize: '32px', marginBottom: '12px' }}>🌸</p>
-                <p>No results found. Try different selections.</p>
-              </div>
+                <p>No anime found for those selections. Try different options.</p>
+                </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {results.map(rec => (
