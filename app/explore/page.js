@@ -5,25 +5,65 @@ import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import { createClient } from '../lib/supabase-client'
 
+const lookingForOptions = [
+  'Recommendations',
+  'Friends',
+  'Discussion',
+  'Watch Clubs',
+  'Romance Recovery',
+]
+
 export default function Explore() {
   const [userSearch, setUserSearch] = useState('')
   const [userResults, setUserResults] = useState([])
   const [searched, setSearched] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [selectedFilter, setSelectedFilter] = useState(null)
   const supabase = createClient()
 
   async function handleUserSearch(e) {
     e.preventDefault()
-    if (!userSearch.trim()) return
     setLoading(true)
     setSearched(true)
 
-    const { data } = await supabase
+    let query = supabase
       .from('profiles')
-      .select('username, bio, avatar_url, favourite_anime, mood_tags, anime_that_broke_me, anime_that_healed_me')
-      .ilike('username', `%${userSearch}%`)
+      .select('username, bio, avatar_url, favourite_anime, mood_tags, anime_that_broke_me, anime_that_healed_me, looking_for')
       .limit(20)
 
+    if (userSearch.trim()) {
+      query = query.ilike('username', `%${userSearch}%`)
+    }
+
+    if (selectedFilter) {
+      query = query.contains('looking_for', [selectedFilter])
+    }
+
+    const { data } = await query
+    setUserResults(data || [])
+    setLoading(false)
+  }
+
+  async function handleFilterClick(filter) {
+    const newFilter = selectedFilter === filter ? null : filter
+    setSelectedFilter(newFilter)
+    setLoading(true)
+    setSearched(true)
+
+    let query = supabase
+      .from('profiles')
+      .select('username, bio, avatar_url, favourite_anime, mood_tags, anime_that_broke_me, anime_that_healed_me, looking_for')
+      .limit(20)
+
+    if (userSearch.trim()) {
+      query = query.ilike('username', `%${userSearch}%`)
+    }
+
+    if (newFilter) {
+      query = query.contains('looking_for', [newFilter])
+    }
+
+    const { data } = await query
     setUserResults(data || [])
     setLoading(false)
   }
@@ -42,12 +82,12 @@ export default function Explore() {
         }}>
           Explore
         </h1>
-        <p style={{ fontSize: '15px', color: 'var(--text-soft)', marginBottom: '40px' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-soft)', marginBottom: '32px' }}>
           Find romance anime fans with similar taste.
         </p>
 
-        {/* User search */}
-        <form onSubmit={handleUserSearch} style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+        {/* Search */}
+        <form onSubmit={handleUserSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
           <input
             type="text"
             placeholder="Search for a user..."
@@ -78,6 +118,33 @@ export default function Explore() {
           </button>
         </form>
 
+        {/* Looking for filters */}
+        <div style={{ marginBottom: '32px' }}>
+          <p style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-soft)', marginBottom: '12px' }}>
+            Filter by what they're looking for:
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {lookingForOptions.map(option => (
+              <button
+                key={option}
+                onClick={() => handleFilterClick(option)}
+                style={{
+                  backgroundColor: selectedFilter === option ? 'var(--primary)' : 'white',
+                  color: selectedFilter === option ? 'white' : 'var(--text)',
+                  border: `2px solid ${selectedFilter === option ? 'var(--primary)' : 'var(--border)'}`,
+                  borderRadius: '20px',
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                }}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Results */}
         {loading && (
           <p style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '40px' }}>Searching...</p>
@@ -92,12 +159,12 @@ export default function Explore() {
         {!loading && !searched && (
           <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-soft)' }}>
             <p style={{ fontSize: '40px', marginBottom: '16px' }}>🌸</p>
-            <p style={{ fontSize: '16px' }}>Search for a username to find people.</p>
+            <p style={{ fontSize: '16px' }}>Search for a username or filter by what people are looking for.</p>
           </div>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {userResults.map(user => (
+          {!loading && userResults.map(user => (
             <Link key={user.username} href={`/profile/${user.username}`} style={{ textDecoration: 'none' }}>
               <div style={{
                 backgroundColor: 'white',
@@ -131,7 +198,7 @@ export default function Explore() {
                       {user.bio}
                     </p>
                   )}
-                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '8px' }}>
                     {user.favourite_anime?.length > 0 && (
                       <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>
                         💕 {user.favourite_anime[0]}
@@ -144,7 +211,7 @@ export default function Explore() {
                     )}
                   </div>
                   {user.mood_tags?.length > 0 && (
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                       {user.mood_tags.slice(0, 3).map(tag => (
                         <span key={tag} style={{
                           backgroundColor: 'var(--lavender)',
@@ -155,6 +222,23 @@ export default function Explore() {
                           fontWeight: '500',
                         }}>
                           {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {user.looking_for?.length > 0 && (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {user.looking_for.map(item => (
+                        <span key={item} style={{
+                          backgroundColor: selectedFilter === item ? 'var(--primary)' : 'var(--cream)',
+                          border: `1px solid ${selectedFilter === item ? 'var(--primary)' : 'var(--border)'}`,
+                          color: selectedFilter === item ? 'white' : 'var(--text)',
+                          borderRadius: '20px',
+                          padding: '3px 10px',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                        }}>
+                          {item}
                         </span>
                       ))}
                     </div>
