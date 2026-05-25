@@ -213,9 +213,11 @@ export default function Settings() {
 
   async function handlePasswordReset() {
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.auth.resetPasswordForEmail(user.email)
-    setMessage({ type: 'success', text: 'Password reset email sent.' })
-  }
+    await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: 'http://localhost:3000/reset-password',
+    })
+    setMessage({ type: 'success', text: 'Password reset email sent. Check your inbox.' })
+    }
 
   async function handleDeleteAccount() {
     const confirmed = window.confirm('Are you sure you want to delete your account? This cannot be undone and will remove all your posts, messages and data.')

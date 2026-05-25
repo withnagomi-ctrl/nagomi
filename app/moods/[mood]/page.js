@@ -626,6 +626,7 @@ export default function MoodRoom() {
                 key={post.id}
                 post={post}
                 currentUserId={currentUser?.id}
+                currentUsername={currentProfile?.username}
                 blurSpoilers={blurSpoilers}
                 />
             ))}

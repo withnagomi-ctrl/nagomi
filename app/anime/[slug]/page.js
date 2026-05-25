@@ -80,11 +80,21 @@ export default function AnimeRoom() {
   const [submitting, setSubmitting] = useState(false)
   const [showPostForm, setShowPostForm] = useState(false)
   const [blurSpoilers, setBlurSpoilers] = useState(true)
+  const [currentProfile, setCurrentProfile] = useState(null)
 
   useEffect(() => {
     async function load() {
         const { data: { user } } = await supabase.auth.getUser()
         setCurrentUser(user)
+
+        if (user) {
+            const { data: cp } = await supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', user.id)
+                .single()
+            setCurrentProfile(cp)
+            }
 
         if (user) {
         const { data: userPref } = await supabase
@@ -541,6 +551,7 @@ export default function AnimeRoom() {
                 key={post.id}
                 post={post}
                 currentUserId={currentUser?.id}
+                currentUsername={currentProfile?.username}
                 blurSpoilers={blurSpoilers}
                 />
             ))}

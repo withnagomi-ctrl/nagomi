@@ -34,10 +34,27 @@ export default function SeasonalPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [currentRes, upcomingRes] = await Promise.all([
-          fetch('https://api.jikan.moe/v4/seasons/now'),
-          fetch('https://api.jikan.moe/v4/seasons/upcoming'),
-        ])
+        async function fetchWithRetry(url, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                const res = await fetch(url)
+                if (res.status === 429) {
+                await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+                continue
+                }
+                return res
+            }
+            return null
+            }
+
+            const [currentRes, upcomingRes] = await Promise.all([
+            fetchWithRetry('https://api.jikan.moe/v4/seasons/now'),
+            fetchWithRetry('https://api.jikan.moe/v4/seasons/upcoming'),
+            ])
+
+            if (!currentRes || !upcomingRes) {
+            setLoading(false)
+            return
+            }
 
         const currentData = await currentRes.json()
         const upcomingData = await upcomingRes.json()

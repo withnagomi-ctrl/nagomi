@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '../lib/supabase-client'
+import CommentSection from './CommentSection'
 
 
 
@@ -14,7 +15,7 @@ const reactionTypes = [
   { type: 'added_to_list', label: 'Added to list', emoji: '📺' },
 ]
 
-export default function PostCard({ post, currentUserId, blurSpoilers }) {
+export default function PostCard({ post, currentUserId, currentUsername, blurSpoilers }) {
   const [deleted, setDeleted] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [reactions, setReactions] = useState(post.reactions || [])
@@ -255,6 +256,14 @@ if (data) setReactions(prev => [...prev, data])
             🗑 Delete
         </button>
         )}
+
+        <CommentSection
+            postId={post.id}
+            postOwnerId={post.user_id}
+            currentUserId={currentUserId}
+            currentUsername={post.profiles?.username}
+            />
     </div>
+    
   )
 }
