@@ -211,11 +211,12 @@ if (followPref?.notif_follows !== false) {
   await supabase
     .from('notifications')
     .insert({
-      user_id: profile.id,
-      type: 'follow',
-      content: `${currentProfile.username} started following you 🌸`,
-      link: `/profile/${currentProfile.username}`,
-      read: false,
+        user_id: profile.id,
+        actor_id: currentUser.id,
+        type: 'follow',
+        content: `${currentProfile.username} started following you 🌸`,
+        link: `/profile/${currentProfile.username}`,
+        read: false,
     })
 }
 
@@ -610,7 +611,14 @@ setFollowerCount(prev => prev + 1)
                         onClick={() => setShowFollowersModal(false)}
                         style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', textDecoration: 'none', flex: 1 }}
                     >
-                        🌸 {f.profiles?.username}
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--lavender)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', overflow: 'hidden', flexShrink: 0 }}>
+                                {f.profiles?.avatar_url ? (
+                                <img src={f.profiles.avatar_url} alt={f.profiles?.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : '🌸'}
+                            </div>
+                            {f.profiles?.username}
+                            </div>
                         {f.profiles?.bio && (
                         <p style={{ fontSize: '12px', color: 'var(--text-soft)', fontWeight: '400', marginTop: '2px' }}>
                             {f.profiles.bio.slice(0, 50)}{f.profiles.bio.length > 50 ? '...' : ''}
@@ -667,7 +675,14 @@ setFollowerCount(prev => prev + 1)
                         onClick={() => setShowFollowingModal(false)}
                         style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', textDecoration: 'none', flex: 1 }}
                     >
-                        🌸 {f.profiles?.username}
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--lavender)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', overflow: 'hidden', flexShrink: 0 }}>
+                                {f.profiles?.avatar_url ? (
+                                <img src={f.profiles.avatar_url} alt={f.profiles?.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : '🌸'}
+                            </div>
+                            {f.profiles?.username}
+                            </div>
                         {f.profiles?.bio && (
                         <p style={{ fontSize: '12px', color: 'var(--text-soft)', fontWeight: '400', marginTop: '2px' }}>
                             {f.profiles.bio.slice(0, 50)}{f.profiles.bio.length > 50 ? '...' : ''}

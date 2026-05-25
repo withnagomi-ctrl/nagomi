@@ -25,11 +25,11 @@ export default function Notifications() {
       }
 
       const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
+      .from('notifications')
+      .select('*, actor:profiles!notifications_actor_id_fkey(username, avatar_url)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
 
       if (!cancelled) {
         setNotifications(data || [])
@@ -54,19 +54,28 @@ export default function Notifications() {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          if (!cancelled) {
-            setNotifications(prev => {
-              if (prev.some(n => n.id === payload.new.id)) return prev
-              return [payload.new, ...prev]
-            })
-            // Mark new notification as read immediately since we're on the page
-            supabase
-              .from('notifications')
-              .update({ read: true })
-              .eq('id', payload.new.id)
-              .then()
-          }
+        async (payload) => {
+          if (cancelled) return
+
+          const { data: fullNotification } = await supabase
+            .from('notifications')
+            .select('*, actor:profiles!notifications_actor_id_fkey(username, avatar_url)')
+            .eq('id', payload.new.id)
+            .single()
+
+          const notificationToAdd = fullNotification || payload.new
+
+          setNotifications(prev => {
+            if (prev.some(n => n.id === notificationToAdd.id)) return prev
+            return [notificationToAdd, ...prev]
+          })
+
+          // Mark new notification as read immediately since we're on the page
+          supabase
+            .from('notifications')
+            .update({ read: true })
+            .eq('id', payload.new.id)
+            .then()
         }
       )
 
@@ -151,9 +160,32 @@ export default function Notifications() {
                   cursor: notif.link ? 'pointer' : 'default',
                 }}
               >
-                <span style={{ fontSize: '20px', flexShrink: 0 }}>
-                  {getNotificationIcon(notif.type)}
-                </span>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--lavender)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}>
+                  {notif.actor?.avatar_url ? (
+                    <img
+                      src={notif.actor.avatar_url}
+                      alt={notif.actor?.username || 'user'}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    getNotificationIcon(notif.type)
+                  )}
+                </div>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '14px', color: 'var(--text)', lineHeight: '1.5' }}>
                     {notif.content}

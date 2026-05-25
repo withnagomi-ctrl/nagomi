@@ -212,16 +212,35 @@ export default function Navbar() {
   )}
 </Link>
             <Link href={`/profile/${profile.username}`} style={{
-              backgroundColor: 'var(--lavender)',
-              color: 'var(--text)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: '500',
-              padding: '8px 20px',
-              borderRadius: '20px',
-            }}>
-              {profile.username}
-            </Link>
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: 'var(--lavender)',
+                color: 'var(--text)',
+                textDecoration: 'none',
+                fontSize: '14px',
+                fontWeight: '500',
+                padding: '6px 16px 6px 6px',
+                borderRadius: '20px',
+                }}>
+                <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                }}>
+                    {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt={profile.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : '🌸'}
+                </div>
+                {profile.username}
+                </Link>
             <button
               onClick={handleLogout}
               style={{

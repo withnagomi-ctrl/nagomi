@@ -231,14 +231,29 @@ export default function MoodRoom() {
     setSending(false)
     }
 
-  async function handlePost(e) {
-    e.preventDefault()
-    if (!currentUser) {
-      router.push('/login')
-      return
-    }
-    if (!postContent.trim()) return
-    setSubmitting(true)
+    async function handlePost(e) {
+        e.preventDefault()
+
+        if (!currentUser) {
+            router.push('/login')
+            return
+        }
+
+        if (!postContent.trim()) return
+
+        if (containsBannedWord(postContent)) {
+            alert('Your post contains inappropriate content.')
+            return
+        }
+
+        const { allowed, message } = await checkRateLimit(currentUser.id, 'post')
+
+        if (!allowed) {
+            alert(message)
+            return
+        }
+
+        setSubmitting(true)
 
     const { data, error } = await supabase
       .from('posts')
@@ -385,9 +400,10 @@ export default function MoodRoom() {
                     justifyContent: 'center',
                     fontSize: '14px',
                     flexShrink: 0,
-                  }}>
+                    overflow: 'hidden',
+                    }}>
                     🌸
-                  </div>
+                    </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '3px', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '../lib/supabase-client'
+import { containsBannedWord } from '../lib/wordFilter'
+import { checkRateLimit } from '../lib/rateLimit'
 
 const reactionTypes = [
   { type: 'felt_this', emoji: '🫀' },
@@ -115,6 +117,19 @@ export default function CommentSection({ postId, postOwnerId, currentUserId, cur
   async function handleSubmit(e) {
     e.preventDefault()
     if (!input.trim() || !currentUserId) return
+
+    if (containsBannedWord(input)) {
+        alert('Your comment contains inappropriate content and cannot be posted.')
+        return
+    }
+
+    const { allowed, message: limitMessage } = await checkRateLimit(currentUserId, 'comment')
+
+    if (!allowed) {
+        alert(limitMessage)
+        return
+    }
+
     setSubmitting(true)
 
     const { data, error } = await supabase
@@ -197,18 +212,21 @@ export default function CommentSection({ postId, postOwnerId, currentUserId, cur
         }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--lavender)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              flexShrink: 0,
-            }}>
-              🌸
-            </div>
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--lavender)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                flexShrink: 0,
+                overflow: 'hidden',
+                }}>
+                {comment.profiles?.avatar_url ? (
+                    <img src={comment.profiles.avatar_url} alt={comment.profiles?.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : '🌸'}
+                </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '4px' }}>
                 <Link href={`/profile/${comment.profiles?.username}`} style={{

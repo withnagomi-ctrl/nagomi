@@ -21,30 +21,37 @@ export default function ReportModal({ reportedUserId, reportedPostId, messageCon
 
   async function handleSubmit() {
     if (!selectedReason) return
-        const { allowed, message: limitMessage } = await checkRateLimit(user.id, 'report')
-        if (!allowed) {
-        alert(limitMessage)
-        setSubmitting(false)
-        return
-        }
+
     setSubmitting(true)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+
+    if (!user) {
+        setSubmitting(false)
+        return
+    }
+
+    const { allowed, message: limitMessage } = await checkRateLimit(user.id, 'report')
+
+    if (!allowed) {
+        alert(limitMessage)
+        setSubmitting(false)
+        return
+    }
 
     await supabase
-      .from('reports')
-      .insert({
+        .from('reports')
+        .insert({
         reporter_id: user.id,
         reported_user_id: reportedUserId || null,
         reported_post_id: reportedPostId || null,
         reason: selectedReason,
         status: 'pending',
-      })
+        })
 
     setSubmitted(true)
     setSubmitting(false)
-  }
+    }
 
   return (
     <div style={{

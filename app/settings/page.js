@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import { createClient } from '../lib/supabase-client'
+import AvatarUpload from '../components/AvatarUpload'
 
 const moodTags = [
   'Wholesome', 'Happy Ending', 'Actual Dating', 'Slow Burn',
@@ -398,6 +399,17 @@ export default function Settings() {
                 Profile
               </h3>
 
+              <div style={cardStyle}>
+                <h4 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', marginBottom: '20px' }}>Profile Photo</h4>
+                <AvatarUpload
+                    currentAvatarUrl={profile?.avatar_url}
+                    userId={currentUser?.id}
+                    onUploadComplete={(url) => {
+                    setProfile(prev => ({ ...prev, avatar_url: url }))
+                    }}
+                />
+                </div>
+              
               <div style={cardStyle}>
                 <h4 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', marginBottom: '20px' }}>Basic Info</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

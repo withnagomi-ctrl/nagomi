@@ -97,19 +97,11 @@ if (data) setReactions(prev => [...prev, data])
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--lavender)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '16px',
-            flexShrink: 0,
-          }}>
-            🌸
-          </div>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--lavender)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0, overflow: 'hidden' }}>
+            {post.profiles?.avatar_url ? (
+                <img src={post.profiles.avatar_url} alt={post.profiles.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : '🌸'}
+            </div>
           <div>
             <Link href={`/profile/${post.profiles?.username}`} style={{
               fontSize: '14px',
@@ -261,7 +253,7 @@ if (data) setReactions(prev => [...prev, data])
             postId={post.id}
             postOwnerId={post.user_id}
             currentUserId={currentUserId}
-            currentUsername={post.profiles?.username}
+            currentUsername={currentUsername}
             />
     </div>
     
