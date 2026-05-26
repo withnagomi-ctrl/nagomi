@@ -96,7 +96,7 @@ export default function MoodRoom() {
 
     const { data: recentMessages } = await supabase
     .from('mood_messages')
-    .select('*')
+    .select('*, profiles:user_id(username, avatar_url)')
     .eq('room_slug', mood)
     .order('created_at', { ascending: true })
     .limit(100)
@@ -149,9 +149,17 @@ export default function MoodRoom() {
         table: 'mood_messages',
         filter: `room_slug=eq.${mood}`,
       },
-      (payload) => {
-        if (!cancelled) setMessages(prev => [...prev, payload.new])
-      }
+      async (payload) => {
+        if (cancelled) return
+
+        const { data: fullMessage } = await supabase
+            .from('mood_messages')
+            .select('*, profiles:user_id(username, avatar_url)')
+            .eq('id', payload.new.id)
+            .single()
+
+        setMessages(prev => [...prev, fullMessage || payload.new])
+        }
     )
 
     currentChannel.subscribe()
@@ -404,18 +412,30 @@ export default function MoodRoom() {
                     flexShrink: 0,
                     overflow: 'hidden',
                     }}>
-                    🌸
+                    {msg.profiles?.avatar_url ? (
+                        <img
+                        src={msg.profiles.avatar_url}
+                        alt={msg.profiles?.username || msg.username || 'user'}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                        }}
+                        />
+                    ) : (
+                        '🌸'
+                    )}
                     </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', marginBottom: '3px', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                        <Link href={`/profile/${msg.username}`} style={{
+                        <Link href={`/profile/${msg.profiles?.username || msg.username}`} style={{
                             fontSize: '13px',
                             fontWeight: '600',
                             color: 'var(--text)',
                             textDecoration: 'none',
                         }}>
-                            {msg.username}
+                            {msg.profiles?.username || msg.username}
                         </Link>
                         <span style={{ fontSize: '11px', color: 'var(--text-soft)' }}>
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

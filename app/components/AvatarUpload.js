@@ -64,6 +64,37 @@ export default function AvatarUpload({ currentAvatarUrl, userId, onUploadComplet
     reader.readAsDataURL(file)
   }
 
+  async function handleRemovePhoto() {
+    if (!userId) return
+
+    const confirmed = window.confirm('Remove your profile photo?')
+    if (!confirmed) return
+
+    setUploading(true)
+
+    const fileName = `${userId}/avatar.jpg`
+
+    // Remove from storage if it exists
+    await supabase.storage
+        .from('avatars')
+        .remove([fileName])
+
+    // Clear avatar URL from profile
+    const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', userId)
+
+    if (error) {
+        alert(error.message)
+        setUploading(false)
+        return
+    }
+
+    onUploadComplete(null)
+    setUploading(false)
+    }
+  
   async function handleUpload() {
     if (!croppedAreaPixels || !imageSrc) return
     setUploading(true)
@@ -116,23 +147,47 @@ export default function AvatarUpload({ currentAvatarUrl, userId, onUploadComplet
           </div>
         </div>
         <div>
-          <label style={{
-            backgroundColor: 'white',
-            border: '2px solid var(--border)',
-            borderRadius: '12px',
-            padding: '10px 20px',
-            fontSize: '14px',
-            fontWeight: '500',
-            color: 'var(--text)',
-            cursor: 'pointer',
-            display: 'inline-block',
-          }}>
-            Choose photo
-            <input type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
-          </label>
-          <p style={{ fontSize: '12px', color: 'var(--text-soft)', marginTop: '6px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{
+                backgroundColor: 'white',
+                border: '2px solid var(--border)',
+                borderRadius: '12px',
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                display: 'inline-block',
+            }}>
+                Choose photo
+                <input type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
+            </label>
+
+            {currentAvatarUrl && (
+                <button
+                type="button"
+                onClick={handleRemovePhoto}
+                disabled={uploading}
+                style={{
+                    backgroundColor: '#ffe4e4',
+                    border: '2px solid #e85555',
+                    borderRadius: '12px',
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: '#e85555',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
+                    opacity: uploading ? 0.7 : 1,
+                }}
+                >
+                Remove photo
+                </button>
+            )}
+            </div>
+
+            <p style={{ fontSize: '12px', color: 'var(--text-soft)', marginTop: '6px' }}>
             Max 5MB. JPG, PNG, GIF.
-          </p>
+            </p>
         </div>
       </div>
 
