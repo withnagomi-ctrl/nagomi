@@ -242,8 +242,8 @@ export default function MoodRoom() {
         if (!postContent.trim()) return
 
         if (containsBannedWord(postContent)) {
-            alert('Your post contains inappropriate content.')
-            return
+        alert('Your post contains inappropriate content.')
+        return
         }
 
         const { allowed, message } = await checkRateLimit(currentUser.id, 'post')
@@ -381,7 +381,9 @@ export default function MoodRoom() {
               <div style={{ textAlign: 'center', color: 'var(--text-soft)', marginTop: '60px' }}>
                 <p style={{ fontSize: '28px', marginBottom: '12px' }}>{room.emoji}</p>
                 <p style={{ fontSize: '15px' }}>No one has said anything yet.</p>
-                <p style={{ fontSize: '14px', marginTop: '4px' }}>Be the first to share how you're feeling.</p>
+                <p style={{ fontSize: '14px', marginTop: '4px', lineHeight: '1.6' }}>
+                Be the first to share how you’re feeling, or leave a longer recovery post below.
+                </p>
               </div>
             ) : (
               messages.map(msg => (

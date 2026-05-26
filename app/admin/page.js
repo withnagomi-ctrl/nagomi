@@ -20,6 +20,7 @@ export default function AdminDashboard() {
   const [banReason, setBanReason] = useState('')
   const [banningUserId, setBanningUserId] = useState(null)
   const [showBanModal, setShowBanModal] = useState(false)
+  const [currentAdminId, setCurrentAdminId] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -27,7 +28,9 @@ export default function AdminDashboard() {
       if (!user) {
         router.push('/')
         return
-      }
+        }
+
+        setCurrentAdminId(user.id)
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -107,13 +110,38 @@ export default function AdminDashboard() {
     setBannedUsers(data || [])
   }
 
+  async function logAdminAction(actionType, targetType, targetId, reason = null, metadata = {}) {
+  if (!currentAdminId) return
+
+  await supabase
+    .from('admin_audit_logs')
+    .insert({
+      admin_id: currentAdminId,
+      action_type: actionType,
+      target_type: targetType,
+      target_id: targetId,
+      reason,
+      metadata,
+    })
+}
+
+  
   async function dismissReport(reportId) {
-    await supabase
-      .from('reports')
-      .update({ status: 'dismissed' })
-      .eq('id', reportId)
+    const res = await fetch('/api/admin-dismiss-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok || !data.success) {
+        alert(data.error || 'Failed to dismiss report.')
+        return
+    }
+
     await loadReports()
-  }
+    }
 
   async function banUser(userId) {
     setBanningUserId(userId)
@@ -161,9 +189,22 @@ export default function AdminDashboard() {
   async function deletePost(postId) {
     const confirmed = window.confirm('Delete this post?')
     if (!confirmed) return
-    await supabase.from('posts').delete().eq('id', postId)
+
+    const res = await fetch('/api/admin-delete-post', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok || !data.success) {
+        alert(data.error || 'Failed to delete post.')
+        return
+    }
+
     await loadPosts()
-  }
+    }
 
   if (loading) return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }}>

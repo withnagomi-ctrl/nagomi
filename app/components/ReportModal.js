@@ -31,6 +31,44 @@ export default function ReportModal({ reportedUserId, reportedPostId, messageCon
         return
     }
 
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+    const { count: dailyReportCount } = await supabase
+        .from('reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('reporter_id', user.id)
+        .gte('created_at', since)
+
+    if ((dailyReportCount || 0) >= 10) {
+        alert('You have reached the report limit for today. Please try again tomorrow.')
+        setSubmitting(false)
+        return
+    }
+
+    const reportTarget =
+        reportedPostId
+        ? `post:${reportedPostId}`
+        : reportedUserId && messageContent
+            ? `message:${reportedUserId}:${messageContent.trim().slice(0, 200)}`
+            : reportedUserId
+            ? `user:${reportedUserId}`
+            : `unknown:${messageContent?.trim().slice(0, 200) || 'no-content'}`
+
+    const reportKey = `${reportTarget}:reason:${selectedReason}`
+
+    const { count: duplicateCount } = await supabase
+        .from('reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('reporter_id', user.id)
+        .eq('report_key', reportKey)
+        .gte('created_at', since)
+
+    if ((duplicateCount || 0) > 0) {
+        alert('You have already reported this today. Our moderators will review it.')
+        setSubmitting(false)
+        return
+    }
+
     const { allowed, message: limitMessage } = await checkRateLimit(user.id, 'report')
 
     if (!allowed) {
@@ -39,7 +77,7 @@ export default function ReportModal({ reportedUserId, reportedPostId, messageCon
         return
     }
 
-    await supabase
+    const { error } = await supabase
         .from('reports')
         .insert({
         reporter_id: user.id,
@@ -47,7 +85,14 @@ export default function ReportModal({ reportedUserId, reportedPostId, messageCon
         reported_post_id: reportedPostId || null,
         reason: selectedReason,
         status: 'pending',
+        report_key: reportKey,
         })
+
+    if (error) {
+        alert(error.message)
+        setSubmitting(false)
+        return
+    }
 
     setSubmitted(true)
     setSubmitting(false)

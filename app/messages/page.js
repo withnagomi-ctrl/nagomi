@@ -61,7 +61,20 @@ export default function Messages() {
           .single()
 
         if (targetProfile) {
-          const { data: iFollow } = await supabase
+            const { data: blockBetweenUsers } = await supabase
+                .from('blocks')
+                .select('*')
+                .or(
+                `and(blocker_id.eq.${user.id},blocked_id.eq.${targetProfile.id}),and(blocker_id.eq.${targetProfile.id},blocked_id.eq.${user.id})`
+                )
+                .maybeSingle()
+
+            if (blockBetweenUsers) {
+                alert('You cannot message this user because one of you has blocked the other.')
+                return
+            }
+
+            const { data: iFollow } = await supabase
             .from('follows')
             .select('*')
             .eq('follower_id', user.id)
@@ -190,7 +203,7 @@ export default function Messages() {
 
     const { data } = await supabase
       .from('messages')
-      .select('*, sender:profiles!messages_sender_id_fkey(id, username), receiver:profiles!messages_receiver_id_fkey(id, username)')
+      .select('*, sender:profiles!messages_sender_id_fkey(id, username, avatar_url), receiver:profiles!messages_receiver_id_fkey(id, username, avatar_url)')
       .or(
         `and(sender_id.eq.${user.id},receiver_id.eq.${otherProfile.id}),and(sender_id.eq.${otherProfile.id},receiver_id.eq.${user.id})`
       )
@@ -251,7 +264,20 @@ export default function Messages() {
     e.preventDefault()
     if (!messageInput.trim() || !activeConvo || !currentUser) return
 
-    if (containsBannedWord(messageInput)) {
+        const { data: blockBetweenUsers } = await supabase
+        .from('blocks')
+        .select('*')
+        .or(
+            `and(blocker_id.eq.${currentUser.id},blocked_id.eq.${activeConvo.id}),and(blocker_id.eq.${activeConvo.id},blocked_id.eq.${currentUser.id})`
+        )
+        .maybeSingle()
+
+        if (blockBetweenUsers) {
+        alert('You cannot message this user because one of you has blocked the other.')
+        return
+        }
+
+        if (containsBannedWord(messageInput)) {
       alert('Your message contains inappropriate content and cannot be sent.')
       return
     }
@@ -266,7 +292,7 @@ export default function Messages() {
 
     if (activeIsRequest) {
       // Send as a message request
-      await supabase
+      const { error: requestError } = await supabase
         .from('messages')
         .insert({
             sender_id: currentUser.id,
@@ -275,6 +301,12 @@ export default function Messages() {
             is_request: true,
             request_status: 'pending',
         })
+
+        if (requestError) {
+        alert(requestError.message)
+        setSending(false)
+        return
+        }
 
         const { data: msgPref } = await supabase
         .from('profiles')
@@ -298,15 +330,21 @@ export default function Messages() {
       setActiveConvo(null)
       setActiveIsRequest(false)
     } else {
-      await supabase
+      const { error: messageError } = await supabase
         .from('messages')
         .insert({
-          sender_id: currentUser.id,
-          receiver_id: activeConvo.id,
-          content: messageInput.trim(),
+            sender_id: currentUser.id,
+            receiver_id: activeConvo.id,
+            content: messageInput.trim(),
         })
 
-      await loadConversations(currentUser.id)
+        if (messageError) {
+        alert(messageError.message)
+        setSending(false)
+        return
+        }
+
+        await loadConversations(currentUser.id)
     }
 
     setMessageInput('')
@@ -428,7 +466,10 @@ export default function Messages() {
                 {conversations.length === 0 ? (
                   <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-soft)' }}>
                     <p style={{ fontSize: '24px', marginBottom: '12px' }}>💬</p>
-                    <p style={{ fontSize: '14px' }}>No conversations yet.</p>
+                    <p style={{ fontSize: '14px', marginBottom: '6px' }}>No conversations yet.</p>
+                    <p style={{ fontSize: '12px', lineHeight: '1.5' }}>
+                    Visit someone’s profile and send a respectful message request to start chatting.
+                    </p>
                   </div>
                 ) : (
                   conversations.map(convo => (
@@ -455,9 +496,18 @@ export default function Messages() {
                         justifyContent: 'center',
                         fontSize: '18px',
                         flexShrink: 0,
-                      }}>
-                        🌸
-                      </div>
+                        overflow: 'hidden',
+                        }}>
+                        {convo.profile?.avatar_url ? (
+                            <img
+                            src={convo.profile.avatar_url}
+                            alt={convo.profile?.username || 'user'}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                        ) : (
+                            '🌸'
+                        )}
+                        </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>
@@ -514,18 +564,27 @@ export default function Messages() {
                     >
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
                         <div style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          backgroundColor: 'var(--lavender)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '16px',
-                          flexShrink: 0,
-                        }}>
-                          🌸
-                        </div>
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            backgroundColor: 'var(--lavender)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '16px',
+                            flexShrink: 0,
+                            overflow: 'hidden',
+                            }}>
+                            {request.sender?.avatar_url ? (
+                                <img
+                                src={request.sender.avatar_url}
+                                alt={request.sender?.username || 'user'}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                            ) : (
+                                '🌸'
+                            )}
+                            </div>
                         <Link href={`/profile/${request.sender.username}`} style={{
                           fontSize: '14px',
                           fontWeight: '600',
@@ -623,17 +682,27 @@ export default function Messages() {
                 gap: '12px',
               }}>
                 <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--lavender)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                }}>
-                  🌸
-                </div>
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--lavender)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    }}>
+                    {activeConvo?.avatar_url ? (
+                        <img
+                        src={activeConvo.avatar_url}
+                        alt={activeConvo?.username || 'user'}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                    ) : (
+                        '🌸'
+                    )}
+                    </div>
                 <Link href={`/profile/${activeConvo.username}`} style={{
                   fontSize: '15px',
                   fontWeight: '600',
@@ -731,7 +800,20 @@ export default function Messages() {
                 padding: '16px 20px',
                 borderTop: '1px solid var(--border)',
               }}>
-                <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px' }}>
+                <div style={{
+                    backgroundColor: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '10px 14px',
+                    marginBottom: '12px',
+                    fontSize: '12px',
+                    color: 'var(--text-soft)',
+                    lineHeight: '1.5',
+                    }}>
+                    Keep conversations respectful. Do not share private details like your school, address, phone number, exact location, passwords, or private social accounts.
+                    </div>
+
+                    <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px' }}>
                   <input
                     type="text"
                     value={messageInput}

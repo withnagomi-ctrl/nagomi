@@ -35,31 +35,32 @@ export default function Signup() {
 
     // Sign up
     const { data, error: signupError } = await supabase.auth.signUp({
-      email,
-      password,
+    email,
+    password,
+    options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+        data: {
+        username,
+        },
+    },
     })
 
     if (signupError) {
-      setError(signupError.message)
-      setLoading(false)
-      return
+    setError(signupError.message)
+    setLoading(false)
+    return
     }
 
-    // Create profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: data.user.id,
-        username,
-      })
+    if (!data.user) {
+        setError('Account created. Please check your email to confirm your account.')
+        setLoading(false)
+        return
+        }
 
-    if (profileError) {
-      setError(profileError.message)
-      setLoading(false)
-      return
-    }
+        router.push('/onboarding')
 
-    router.push('/onboarding')
+    //setError('Account created. Please check your email to confirm your account.')
+    //setLoading(false)
   }
 
   return (
@@ -194,7 +195,12 @@ export default function Signup() {
                 onChange={e => setAcceptedRules(e.target.checked)}
                 style={{ marginTop: '2px', flexShrink: 0 }}
                 />
-                <span>I understand and agree to the <a href="/rules" target="_blank" style={{ color: 'var(--primary)' }}>community rules</a></span>
+                <span>
+                    I understand and agree to the{' '}
+                    <a href="/rules" target="_blank" style={{ color: 'var(--primary)' }}>community rules</a>,{' '}
+                    <a href="/terms" target="_blank" style={{ color: 'var(--primary)' }}>terms</a>, and{' '}
+                    <a href="/privacy" target="_blank" style={{ color: 'var(--primary)' }}>privacy policy</a>
+                </span>
             </label>
             </div>
 

@@ -119,8 +119,8 @@ export default function CommentSection({ postId, postOwnerId, currentUserId, cur
     if (!input.trim() || !currentUserId) return
 
     if (containsBannedWord(input)) {
-        alert('Your comment contains inappropriate content and cannot be posted.')
-        return
+    alert('Your comment contains inappropriate content and cannot be posted.')
+    return
     }
 
     const { allowed, message: limitMessage } = await checkRateLimit(currentUserId, 'comment')

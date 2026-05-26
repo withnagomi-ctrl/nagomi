@@ -111,7 +111,10 @@ export default function AnimePage() {
         {!loading && results.length === 0 && !search && (
           <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-soft)' }}>
             <p style={{ fontSize: '40px', marginBottom: '16px' }}>🌸</p>
-            <p style={{ fontSize: '16px' }}>Search for a romance anime to find its room.</p>
+            <p style={{ fontSize: '16px', marginBottom: '6px' }}>Search for a romance anime to find its room.</p>
+            <p style={{ fontSize: '13px', lineHeight: '1.6' }}>
+            Try the anime you just finished, then share how it made you feel.
+            </p>
           </div>
         )}
 

@@ -590,11 +590,25 @@ export default function Settings() {
                 <p style={{ fontSize: '13px', color: 'var(--text-soft)', marginBottom: '12px' }}>
                   Read Nagomi's community rules to understand what's expected.
                 </p>
-                <Link href="/rules" style={{
-                  color: 'var(--primary)', fontWeight: '500', fontSize: '14px', textDecoration: 'none',
-                }}>
-                  View community rules →
-                </Link>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <Link href="/rules" style={{
+                        color: 'var(--primary)', fontWeight: '500', fontSize: '14px', textDecoration: 'none',
+                    }}>
+                        View community rules →
+                    </Link>
+
+                    <Link href="/terms" style={{
+                        color: 'var(--primary)', fontWeight: '500', fontSize: '14px', textDecoration: 'none',
+                    }}>
+                        View terms of use →
+                    </Link>
+
+                    <Link href="/privacy" style={{
+                        color: 'var(--primary)', fontWeight: '500', fontSize: '14px', textDecoration: 'none',
+                    }}>
+                        View privacy policy →
+                    </Link>
+                    </div>
               </div>
             </div>
           )}

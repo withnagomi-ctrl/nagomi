@@ -261,8 +261,8 @@ export default function AnimeRoom() {
     if (!postContent.trim()) return
 
     if (containsBannedWord(postContent)) {
-      alert('Your post contains inappropriate content.')
-      return
+    alert('Your post contains inappropriate content.')
+    return
     }
 
     const { allowed, message } = await checkRateLimit(currentUser.id, 'post')

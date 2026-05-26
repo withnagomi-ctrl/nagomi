@@ -175,6 +175,19 @@ export default function ProfilePage() {
         return
     }
 
+    const { data: blockBetweenUsers } = await supabase
+    .from('blocks')
+    .select('*')
+    .or(
+        `and(blocker_id.eq.${currentUser.id},blocked_id.eq.${profile.id}),and(blocker_id.eq.${profile.id},blocked_id.eq.${currentUser.id})`
+    )
+    .maybeSingle()
+
+    if (blockBetweenUsers) {
+    alert('You cannot follow this user because one of you has blocked the other.')
+    return
+    }
+
     // Check their follow preference
     const { data: targetPref } = await supabase
         .from('profiles')
@@ -196,11 +209,16 @@ export default function ProfilePage() {
       setIsFollowing(false)
       setFollowerCount(prev => prev - 1)
     } else {
-      await supabase
+      const { error: followError } = await supabase
   .from('follows')
   .insert({ follower_id: currentUser.id, following_id: profile.id })
 
-// Send notification
+    if (followError) {
+    alert(followError.message)
+    return
+    }
+
+    // Send notification
 const { data: followPref } = await supabase
   .from('profiles')
   .select('notif_follows')
@@ -257,19 +275,23 @@ setFollowerCount(prev => prev + 1)
         setIsBlocked(false)
     } else {
         await supabase
-        .from('blocks')
-        .insert({ blocker_id: currentUser.id, blocked_id: profile.id })
-        setIsBlocked(true)
-        // Also unfollow if following
-        if (isFollowing) {
-        await supabase
+            .from('blocks')
+            .insert({ blocker_id: currentUser.id, blocked_id: profile.id })
+
+            setIsBlocked(true)
+
+            // Remove follow connections both ways
+            await supabase
             .from('follows')
             .delete()
-            .eq('follower_id', currentUser.id)
-            .eq('following_id', profile.id)
-        setIsFollowing(false)
-        setFollowerCount(prev => prev - 1)
-        }
+            .or(
+                `and(follower_id.eq.${currentUser.id},following_id.eq.${profile.id}),and(follower_id.eq.${profile.id},following_id.eq.${currentUser.id})`
+            )
+
+            if (isFollowing) {
+            setIsFollowing(false)
+            setFollowerCount(prev => Math.max(0, prev - 1))
+            }
     }
     }
 
@@ -387,7 +409,13 @@ setFollowerCount(prev => prev + 1)
                 {isFollowing ? 'Following' : 'Follow'}
                 </button>
                 <button
-                onClick={() => router.push(`/messages?user=${profile.username}`)}
+                onClick={() => {
+                if (isBlocked) {
+                    alert('Unblock this user before messaging them.')
+                    return
+                }
+                router.push(`/messages?user=${profile.username}`)
+                }}
                 style={{
                     backgroundColor: 'white',
                     border: '2px solid var(--border)',

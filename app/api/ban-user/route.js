@@ -37,13 +37,26 @@ export async function POST(request) {
   await adminSupabase
     .from('profiles')
     .update({
-      is_banned: true,
-      ban_reason: reason || 'No reason provided',
-      banned_at: new Date().toISOString(),
+        is_banned: true,
+        ban_reason: reason || 'No reason provided',
+        banned_at: new Date().toISOString(),
     })
     .eq('id', userId)
 
-  return Response.json({ success: true })
+    await adminSupabase
+    .from('admin_audit_logs')
+    .insert({
+        admin_id: user.id,
+        action_type: 'ban_user',
+        target_type: 'user',
+        target_id: userId,
+        reason: reason || 'No reason provided',
+        metadata: {
+        source: 'admin_dashboard',
+        },
+    })
+
+    return Response.json({ success: true })
 }
 
 export async function DELETE(request) {
@@ -81,11 +94,24 @@ export async function DELETE(request) {
   await adminSupabase
     .from('profiles')
     .update({
-      is_banned: false,
-      ban_reason: null,
-      banned_at: null,
+        is_banned: false,
+        ban_reason: null,
+        banned_at: null,
     })
     .eq('id', userId)
 
-  return Response.json({ success: true })
+    await adminSupabase
+    .from('admin_audit_logs')
+    .insert({
+        admin_id: user.id,
+        action_type: 'unban_user',
+        target_type: 'user',
+        target_id: userId,
+        reason: 'User unbanned',
+        metadata: {
+        source: 'admin_dashboard',
+        },
+    })
+
+    return Response.json({ success: true })
 }

@@ -485,7 +485,7 @@ if (activeRooms) {
       )}
 
       {/* Footer */}
-      <footer style={{
+       <footer style={{
         textAlign: 'center',
         padding: '40px 24px',
         color: 'var(--text-soft)',
@@ -497,9 +497,28 @@ if (activeRooms) {
         alignItems: 'center',
       }}>
         <p>nagomi — a cosy place for romance recovery 🌸</p>
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <a href="/rules" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>Community Rules</a>
-          <a href="/about" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>About</a>
+
+        <div style={{
+          display: 'flex',
+          gap: '24px',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+        }}>
+          <a href="/rules" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>
+            Community Rules
+          </a>
+
+          <a href="/about" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>
+            About
+          </a>
+
+          <a href="/terms" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>
+            Terms
+          </a>
+
+          <a href="/privacy" style={{ color: 'var(--text-soft)', textDecoration: 'none', fontSize: '13px' }}>
+            Privacy
+          </a>
         </div>
       </footer>
     </div>

@@ -149,7 +149,7 @@ export default function Navbar() {
 
       {/* Auth */}
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-        {user && profile ? (
+        {user ? (
           <>
             <Link href="/notifications" style={{
                 color: 'var(--text-soft)',
@@ -211,7 +211,7 @@ export default function Navbar() {
     </span>
   )}
 </Link>
-            <Link href={`/profile/${profile.username}`} style={{
+            <Link href={profile?.username ? `/profile/${profile.username}` : '/settings'} style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
@@ -235,11 +235,11 @@ export default function Navbar() {
                     overflow: 'hidden',
                     flexShrink: 0,
                 }}>
-                    {profile.avatar_url ? (
-                    <img src={profile.avatar_url} alt={profile.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : '🌸'}
+                    {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} alt={profile?.username || 'profile'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : '🌸'}
                 </div>
-                {profile.username}
+                {profile?.username || 'Profile'}
                 </Link>
             <button
               onClick={handleLogout}

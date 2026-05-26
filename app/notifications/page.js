@@ -141,7 +141,10 @@ export default function Notifications() {
             color: 'var(--text-soft)',
           }}>
             <p style={{ fontSize: '32px', marginBottom: '12px' }}>🔔</p>
-            <p style={{ fontSize: '15px' }}>No notifications yet.</p>
+            <p style={{ fontSize: '15px', marginBottom: '6px' }}>No notifications yet.</p>
+            <p style={{ fontSize: '13px', lineHeight: '1.6' }}>
+              Follow people, post in anime rooms, or join mood rooms to start seeing activity here.
+            </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

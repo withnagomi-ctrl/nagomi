@@ -52,7 +52,7 @@ export default function Onboarding() {
       })
       .eq('id', user.id)
 
-    router.push('/')
+    router.push('/start')
   }
 
   const containerStyle = {
