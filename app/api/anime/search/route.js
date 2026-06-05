@@ -18,6 +18,8 @@ export async function GET(request) {
       image_url: anime.images?.jpg?.image_url,
       synopsis: anime.synopsis,
       year: anime.year,
+      genres: anime.genres?.map(g => g.name) || [],
+      status: anime.status || null,
       slug: (anime.title_english || anime.title)
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')

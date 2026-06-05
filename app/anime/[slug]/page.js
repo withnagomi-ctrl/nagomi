@@ -169,6 +169,7 @@ export default function AnimeRoom() {
             const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTitle)}&genres=22&limit=1&sfw=true`)
             const data = await res.json()
             const found = data.data?.[0]
+            console.log(found)
 
             if (found) {
             const newSlug = (found.title_english || found.title)
@@ -176,18 +177,32 @@ export default function AnimeRoom() {
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '')
 
-            const { data: inserted } = await supabase
-                .from('anime')
-                .insert({
-                mal_id: found.mal_id,
-                title: found.title_english || found.title,
-                slug: newSlug,
-                image_url: found.images?.jpg?.image_url,
-                synopsis: found.synopsis,
-                year: found.year,
-                })
-                .select()
-                .single()
+            const detailsRes = await fetch(
+              `https://api.jikan.moe/v4/anime/${found.mal_id}/full`
+            )
+
+            const detailsData = await detailsRes.json()
+            const animeDetails = detailsData.data
+            
+            const { data: inserted, error } = await supabase
+            .from('anime')
+            .insert({
+              mal_id: animeDetails.mal_id,
+              title: animeDetails.title_english || animeDetails.title,
+              slug: newSlug,
+              image_url: animeDetails.images?.jpg?.image_url,
+              synopsis: animeDetails.synopsis,
+              year: animeDetails.year,
+              genres: animeDetails.genres?.map(g => g.name) || [],
+              status: animeDetails.status || null,
+            })
+            .select()
+            .single()
+
+          console.log('INSERTED:', inserted)
+          console.log('ERROR:', error)
+
+              
 
             if (inserted) {
                 setAnime(inserted)
@@ -195,6 +210,8 @@ export default function AnimeRoom() {
                 setLoading(false)
                 return
             }
+
+            
 
             // Already exists — fetch by mal_id
             const { data: fallback } = await supabase
