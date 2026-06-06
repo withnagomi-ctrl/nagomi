@@ -64,7 +64,7 @@ export default function ProfilePage() {
   const router = useRouter()
   const supabase = createClient()
 
-  console.log("URL username:", username) // 👈 add it here
+  console.log("URL username:", decodedUsername) // 👈 add it here
 
   const [profile, setProfile] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
@@ -110,10 +110,11 @@ export default function ProfilePage() {
         .maybeSingle()
 
       if (error || !profileData) {
-        console.error(error)
-        router.push('/')
-        return
-      }
+      console.error(error)
+      setLoading(false)
+      router.push('/')
+      return
+    }
 
       setProfile(profileData)
 
@@ -171,7 +172,7 @@ export default function ProfilePage() {
     }
 
     load()
-  }, [username])
+  }, [decodedUsername])
 
   async function handleFollow() {
     if (!currentUser) {

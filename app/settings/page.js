@@ -58,31 +58,27 @@ export default function Settings() {
   const [mutedUsers, setMutedUsers] = useState([])
 
   useEffect(() => {
-    async function load() {
+  async function load() {
+    try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push('/login')
         return
       }
+
       setCurrentUser(user)
 
-      const { data: existing, error } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', username)
-      .maybeSingle()
-
-      if (existing && username !== profile.username) {
-        setMessage({ type: 'error', text: 'That username is already taken.' })
-        setSaving(false)
-        return
-      }
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle()
 
       if (profileData) {
         setProfile(profileData)
         setUsername(profileData.username || '')
         setBio(profileData.bio || '')
-        setFavouriteAnime(profileData.favourite_anime?.[0] || '')
+        setFavouriteAnime(profileData.favourite_anime || [])
         setAnimeThatBrokeMe(profileData.anime_that_broke_me || '')
         setAnimeThatHealedMe(profileData.anime_that_healed_me || '')
         setFavouriteCouple(profileData.favourite_couple || '')
@@ -101,24 +97,32 @@ export default function Settings() {
       }
 
       // Load blocked users
-      const { data: blocks } = await supabase
+      const { data: blocks, error: blocksError } = await supabase
         .from('blocks')
         .select('blocked_id, profiles!blocks_blocked_id_fkey(username)')
         .eq('blocker_id', user.id)
+
+      if (blocksError) console.error(blocksError)
       setBlockedUsers(blocks || [])
 
       // Load muted users
-      const { data: mutes } = await supabase
+      const { data: mutes, error: mutesError } = await supabase
         .from('mutes')
         .select('muted_id, profiles!mutes_muted_id_fkey(username)')
         .eq('muter_id', user.id)
+
+      if (mutesError) console.error(mutesError)
       setMutedUsers(mutes || [])
 
+    } catch (err) {
+      console.error("Settings load failed:", err)
+    } finally {
       setLoading(false)
     }
+  }
 
-    load()
-  }, [])
+  load()
+}, [])
 
   async function saveProfile() {
     setSaving(true)
