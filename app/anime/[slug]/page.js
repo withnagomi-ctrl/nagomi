@@ -127,40 +127,54 @@ export default function AnimeRoom() {
         const year = params.get('year')
         const synopsis = params.get('synopsis')
 
-        if (mal_id && title) {
-            const { data: inserted } = await supabase
+        if (mal_id) {
+        try {
+          const detailsRes = await fetch(
+            `https://api.jikan.moe/v4/anime/${mal_id}/full`
+          )
+
+          const detailsData = await detailsRes.json()
+          const animeDetails = detailsData.data
+
+          const { data: inserted, error } = await supabase
             .from('anime')
             .insert({
-                mal_id: parseInt(mal_id),
-                title,
-                slug,
-                image_url,
-                synopsis,
-                year: year ? parseInt(year) : null,
+              mal_id: animeDetails.mal_id,
+              title: animeDetails.title_english || animeDetails.title,
+              slug,
+              image_url: animeDetails.images?.jpg?.image_url,
+              synopsis: animeDetails.synopsis,
+              year: animeDetails.year,
+              genres: animeDetails.genres?.map(g => g.name) || [],
+              status: animeDetails.status || null,
             })
             .select()
             .single()
 
-            if (inserted) {
+          if (inserted) {
             setAnime(inserted)
             await loadPosts(inserted.id, 'After the Ending')
             setLoading(false)
             return
-            }
+          }
 
-            // Insert failed — row might already exist with slight slug difference, fetch it
-            const { data: fallback } = await supabase
-            .from('anime')
-            .select('*')
-            .eq('mal_id', parseInt(mal_id))
-            .maybeSingle()
+          if (error?.code === '23505') {
+            const { data: existingAnime } = await supabase
+              .from('anime')
+              .select('*')
+              .eq('mal_id', parseInt(mal_id))
+              .single()
 
-            if (fallback) {
-            setAnime(fallback)
-            await loadPosts(fallback.id, 'After the Ending')
-            setLoading(false)
-            return
+            if (existingAnime) {
+              setAnime(existingAnime)
+              await loadPosts(existingAnime.id, 'After the Ending')
+              setLoading(false)
+              return
             }
+          }
+        } catch (err) {
+          console.error(err)
+        }
         }
 
         // Last resort — fetch from Jikan
@@ -199,8 +213,10 @@ export default function AnimeRoom() {
             .select()
             .single()
 
-          console.log('INSERTED:', inserted)
-          console.log('ERROR:', error)
+          console.log("GENRES:", animeDetails.genres)
+          console.log("STATUS:", animeDetails.status)
+          console.log("INSERTED:", inserted)
+          console.log("ERROR:", error)
 
               
 
@@ -230,7 +246,7 @@ export default function AnimeRoom() {
         }
 
         setLoading(false)
-        }
+      }
 
     load()
   }, [slug])
