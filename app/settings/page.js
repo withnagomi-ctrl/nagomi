@@ -66,11 +66,17 @@ export default function Settings() {
       }
       setCurrentUser(user)
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+      const { data: existing, error } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username)
+      .maybeSingle()
+
+      if (existing && username !== profile.username) {
+        setMessage({ type: 'error', text: 'That username is already taken.' })
+        setSaving(false)
+        return
+      }
 
       if (profileData) {
         setProfile(profileData)

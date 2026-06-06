@@ -79,14 +79,14 @@ export default function Messages() {
             .select('*')
             .eq('follower_id', user.id)
             .eq('following_id', targetProfile.id)
-            .single()
+            .maybeSingle()
 
           const { data: theyFollow } = await supabase
             .from('follows')
             .select('*')
             .eq('follower_id', targetProfile.id)
             .eq('following_id', user.id)
-            .single()
+            .maybeSingle()
 
           // Check their messaging preference
             const { data: targetFullProfile } = await supabase

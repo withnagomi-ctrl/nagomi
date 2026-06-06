@@ -17,7 +17,7 @@ function FollowButton({ targetId, currentUserId, supabase }) {
         .select('*')
         .eq('follower_id', currentUserId)
         .eq('following_id', targetId)
-        .single()
+        .maybeSingle()
       setFollowing(!!data)
       setLoading(false)
     }
@@ -60,8 +60,11 @@ function FollowButton({ targetId, currentUserId, supabase }) {
 
 export default function ProfilePage() {
   const { username } = useParams()
+  const decodedUsername = decodeURIComponent(username)
   const router = useRouter()
   const supabase = createClient()
+
+  console.log("URL username:", username) // 👈 add it here
 
   const [profile, setProfile] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
@@ -100,13 +103,14 @@ export default function ProfilePage() {
         setCurrentProfile(cp)
       }
 
-      const { data: profileData } = await supabase
+      const { data: profileData, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('username', username)
-        .single()
+        .eq('username', decodedUsername)
+        .maybeSingle()
 
-      if (!profileData) {
+      if (error || !profileData) {
+        console.error(error)
         router.push('/')
         return
       }
@@ -141,7 +145,7 @@ export default function ProfilePage() {
           .select('*')
           .eq('follower_id', user.id)
           .eq('following_id', profileData.id)
-          .single()
+          .maybeSingle()
         setIsFollowing(!!followData)
       }
 
@@ -151,7 +155,7 @@ export default function ProfilePage() {
             .select('*')
             .eq('blocker_id', user.id)
             .eq('blocked_id', profileData.id)
-            .single()
+            .maybeSingle()
         setIsBlocked(!!blockData)
 
         const { data: muteData } = await supabase
@@ -159,7 +163,7 @@ export default function ProfilePage() {
             .select('*')
             .eq('muter_id', user.id)
             .eq('muted_id', profileData.id)
-            .single()
+            .maybeSingle()
         setIsMuted(!!muteData)
         }
 
@@ -322,7 +326,7 @@ setFollowerCount(prev => prev + 1)
     </div>
   )
 
-  const isOwnProfile = currentUser && currentProfile?.username === username
+  const isOwnProfile = currentUser && currentUser.id === profile?.id
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }}>
